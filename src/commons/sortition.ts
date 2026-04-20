@@ -2,11 +2,16 @@ export type PlayerGender = "M" | "F";
 export type DrawStatus = "ATIVO" | "LIMPO";
 export type RestorationStatus = "success" | "empty" | "read-error" | "invalid-result";
 
+export const MIN_PLAYER_NOTA = 0;
+export const MAX_PLAYER_NOTA = 10;
+export const DEFAULT_PLAYER_NOTA = 0;
+
 export interface IPlayer {
     id: string;
     name: string;
     normalizedName: string;
     gender: PlayerGender;
+    nota: number;
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
@@ -24,6 +29,7 @@ export interface IAllocatedPlayer {
     playerName: string;
     normalizedName: string;
     gender: PlayerGender;
+    nota: number;
     positionInTeam: number;
 }
 
@@ -48,6 +54,9 @@ export interface IDrawTeam {
     isOriginalIncompleteTeam: boolean;
     totalMen: number;
     totalWomen: number;
+    notaTotalMen: number;
+    notaTotalWomen: number;
+    notaTotal: number;
     players: IAllocatedPlayer[];
 }
 
@@ -96,6 +105,33 @@ export interface IPlayerCounts {
     totalPlayers: number;
     totalMen: number;
     totalWomen: number;
+    notaTotalMen: number;
+    notaTotalWomen: number;
+    notaTotal: number;
+}
+
+export function isValidNota(value: unknown): value is number {
+    return (
+        typeof value === "number" &&
+        Number.isInteger(value) &&
+        value >= MIN_PLAYER_NOTA &&
+        value <= MAX_PLAYER_NOTA
+    );
+}
+
+export function coerceNota(value: unknown): number {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        const rounded = Math.round(value);
+        if (rounded < MIN_PLAYER_NOTA) {
+            return MIN_PLAYER_NOTA;
+        }
+        if (rounded > MAX_PLAYER_NOTA) {
+            return MAX_PLAYER_NOTA;
+        }
+        return rounded;
+    }
+
+    return DEFAULT_PLAYER_NOTA;
 }
 
 export function createLocalId(prefix: string) {
@@ -127,13 +163,26 @@ export function formatDateTime(value?: string | null) {
 }
 
 export function getPlayerCounts(players: IPlayer[]): IPlayerCounts {
-    const totalMen = players.filter((player) => player.gender === "M").length;
-    const totalWomen = players.length - totalMen;
+    let totalMen = 0;
+    let notaTotalMen = 0;
+    let notaTotalWomen = 0;
+
+    for (const player of players) {
+        if (player.gender === "M") {
+            totalMen += 1;
+            notaTotalMen += player.nota;
+        } else {
+            notaTotalWomen += player.nota;
+        }
+    }
 
     return {
         totalPlayers: players.length,
         totalMen,
-        totalWomen,
+        totalWomen: players.length - totalMen,
+        notaTotalMen,
+        notaTotalWomen,
+        notaTotal: notaTotalMen + notaTotalWomen,
     };
 }
 
@@ -206,13 +255,13 @@ export function isDrawResultOutdated(
 
     const currentSignature = [...filterActivePlayers(players)]
         .sort((playerA, playerB) => playerA.id.localeCompare(playerB.id))
-        .map((player) => `${player.id}:${player.name}:${player.gender}`)
+        .map((player) => `${player.id}:${player.name}:${player.gender}:${player.nota}`)
         .join("|");
 
     const resultSignature = result.teams
         .flatMap((team) => team.players)
         .sort((playerA, playerB) => playerA.playerId.localeCompare(playerB.playerId))
-        .map((player) => `${player.playerId}:${player.playerName}:${player.gender}`)
+        .map((player) => `${player.playerId}:${player.playerName}:${player.gender}:${player.nota}`)
         .join("|");
 
     return currentSignature !== resultSignature;

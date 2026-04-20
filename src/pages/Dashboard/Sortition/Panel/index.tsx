@@ -214,6 +214,18 @@ export default function PanelPage() {
                             value={activePlayerCounts.totalWomen}
                         />
                         <CompactInfoRow
+                            label="Soma de notas (ativos)"
+                            value={activePlayerCounts.notaTotal}
+                        />
+                        <CompactInfoRow
+                            label="Soma de notas masculinas"
+                            value={activePlayerCounts.notaTotalMen}
+                        />
+                        <CompactInfoRow
+                            label="Soma de notas femininas"
+                            value={activePlayerCounts.notaTotalWomen}
+                        />
+                        <CompactInfoRow
                             label="Jogadores por time"
                             value={configuration?.playersPerTeam || "Nao definido"}
                         />

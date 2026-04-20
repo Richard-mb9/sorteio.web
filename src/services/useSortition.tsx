@@ -112,6 +112,11 @@ export default function useSortition(): IUseSortition {
                     return;
                 }
 
+                if (error.code === SORTITION_ERROR_CODES.playerNotaInvalid) {
+                    toast.error("Informe uma nota inteira entre 0 e 10.");
+                    return;
+                }
+
                 if (error.code === SORTITION_ERROR_CODES.storageRead) {
                     toast.error(getStorageErrorMessage());
                     return;
@@ -145,6 +150,11 @@ export default function useSortition(): IUseSortition {
 
                 if (error.code === SORTITION_ERROR_CODES.playerGenderRequired) {
                     toast.error("Selecione o genero do jogador.");
+                    return;
+                }
+
+                if (error.code === SORTITION_ERROR_CODES.playerNotaInvalid) {
+                    toast.error("Informe uma nota inteira entre 0 e 10.");
                     return;
                 }
 

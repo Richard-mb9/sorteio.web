@@ -3,9 +3,14 @@ import StorageManager from "../../commons/StorageManager";
 import { DEFAULT_ROWS_PER_PAGE } from "../../commons/queryParams";
 import {
     calculateDrawPreview,
+    coerceNota,
     createLocalId,
+    DEFAULT_PLAYER_NOTA,
     filterActivePlayers,
     getPlayerCounts,
+    isValidNota,
+    MAX_PLAYER_NOTA,
+    MIN_PLAYER_NOTA,
     normalizePlayerName,
     sanitizePlayerName,
     shuffleArray,
@@ -24,6 +29,7 @@ export const SORTITION_ERROR_CODES = {
     storageRead: "STORAGE_READ",
     playerNameRequired: "PLAYER_NAME_REQUIRED",
     playerGenderRequired: "PLAYER_GENDER_REQUIRED",
+    playerNotaInvalid: "PLAYER_NOTA_INVALID",
     playerDuplicate: "PLAYER_DUPLICATE",
     playerNotFound: "PLAYER_NOT_FOUND",
     configurationInvalid: "CONFIGURATION_INVALID",
@@ -57,11 +63,13 @@ export interface IPlayerListParams extends IPaginationParams {
 export interface ICreatePlayerRequest {
     name: string;
     gender: PlayerGender;
+    nota: number;
 }
 
 export interface IUpdatePlayerRequest {
     name: string;
     gender: PlayerGender;
+    nota: number;
 }
 
 export interface ISaveDrawConfigurationRequest {
@@ -152,7 +160,7 @@ function validatePlayer(value: unknown): IPlayer | null {
         return null;
     }
 
-    const { id, name, normalizedName, gender, isActive, createdAt, updatedAt } = value;
+    const { id, name, normalizedName, gender, nota, isActive, createdAt, updatedAt } = value;
 
     if (
         typeof id !== "string" ||
@@ -171,6 +179,7 @@ function validatePlayer(value: unknown): IPlayer | null {
         name,
         normalizedName,
         gender,
+        nota: nota === undefined || nota === null ? DEFAULT_PLAYER_NOTA : coerceNota(nota),
         isActive: isActive === undefined ? true : isActive,
         createdAt,
         updatedAt,
@@ -221,7 +230,8 @@ function validateAllocatedPlayer(value: unknown): IAllocatedPlayer | null {
         return null;
     }
 
-    const { allocationId, playerId, playerName, normalizedName, gender, positionInTeam } = value;
+    const { allocationId, playerId, playerName, normalizedName, gender, nota, positionInTeam } =
+        value;
 
     if (
         typeof allocationId !== "string" ||
@@ -240,6 +250,7 @@ function validateAllocatedPlayer(value: unknown): IAllocatedPlayer | null {
         playerName,
         normalizedName,
         gender,
+        nota: nota === undefined || nota === null ? DEFAULT_PLAYER_NOTA : coerceNota(nota),
         positionInTeam: Number(positionInTeam),
     };
 }
@@ -259,6 +270,9 @@ function validateDrawTeam(value: unknown): IDrawTeam | null {
         isOriginalIncompleteTeam,
         totalMen,
         totalWomen,
+        notaTotalMen,
+        notaTotalWomen,
+        notaTotal,
         players,
     } = value;
 
@@ -282,6 +296,14 @@ function validateDrawTeam(value: unknown): IDrawTeam | null {
         return null;
     }
 
+    const validatedPlayers = parsedPlayers as IAllocatedPlayer[];
+    const computedNotaMen = validatedPlayers
+        .filter((player) => player.gender === "M")
+        .reduce((sum, player) => sum + player.nota, 0);
+    const computedNotaWomen = validatedPlayers
+        .filter((player) => player.gender === "F")
+        .reduce((sum, player) => sum + player.nota, 0);
+
     return {
         id,
         resultId,
@@ -292,7 +314,14 @@ function validateDrawTeam(value: unknown): IDrawTeam | null {
         isOriginalIncompleteTeam,
         totalMen: Number(totalMen),
         totalWomen: Number(totalWomen),
-        players: parsedPlayers as IAllocatedPlayer[],
+        notaTotalMen: Number.isInteger(notaTotalMen) ? Number(notaTotalMen) : computedNotaMen,
+        notaTotalWomen: Number.isInteger(notaTotalWomen)
+            ? Number(notaTotalWomen)
+            : computedNotaWomen,
+        notaTotal: Number.isInteger(notaTotal)
+            ? Number(notaTotal)
+            : computedNotaMen + computedNotaWomen,
+        players: validatedPlayers,
     };
 }
 
@@ -570,6 +599,15 @@ function assertValidPlayerName(name: string) {
     }
 }
 
+function assertValidNota(nota: unknown) {
+    if (!isValidNota(nota)) {
+        throw createError(SORTITION_ERROR_CODES.playerNotaInvalid, {
+            min: MIN_PLAYER_NOTA,
+            max: MAX_PLAYER_NOTA,
+        });
+    }
+}
+
 function assertValidConfiguration(playersPerTeam: number) {
     if (!Number.isInteger(playersPerTeam) || playersPerTeam <= 0) {
         throw createError(SORTITION_ERROR_CODES.configurationInvalid);
@@ -645,6 +683,51 @@ function buildProportionalMaleDistribution(teamSizes: number[], totalMen: number
     return distributionTargets.map((distributionTarget) => distributionTarget.menCount);
 }
 
+interface IGenderDistributionSlot {
+    index: number;
+    remaining: number;
+    notaSum: number;
+    tieBreaker: number;
+    players: IPlayer[];
+}
+
+function sortPlayersByNotaDescWithTieShuffle(players: IPlayer[]) {
+    return [...players]
+        .map((player) => ({ player, tieBreaker: Math.random() }))
+        .sort((entryA, entryB) => {
+            if (entryA.player.nota !== entryB.player.nota) {
+                return entryB.player.nota - entryA.player.nota;
+            }
+
+            return entryA.tieBreaker - entryB.tieBreaker;
+        })
+        .map((entry) => entry.player);
+}
+
+function distributePlayersByMinimumSum(sortedPlayers: IPlayer[], slots: IGenderDistributionSlot[]) {
+    for (const player of sortedPlayers) {
+        const eligibleSlots = slots.filter((slot) => slot.remaining > 0);
+
+        if (eligibleSlots.length === 0) {
+            break;
+        }
+
+        const minimumSum = eligibleSlots.reduce(
+            (lowest, slot) => (slot.notaSum < lowest ? slot.notaSum : lowest),
+            eligibleSlots[0].notaSum
+        );
+        const tiedSlots = eligibleSlots.filter((slot) => slot.notaSum === minimumSum);
+        const chosenSlot =
+            tiedSlots.length === 1
+                ? tiedSlots[0]
+                : tiedSlots[Math.floor(Math.random() * tiedSlots.length)];
+
+        chosenSlot.players.push(player);
+        chosenSlot.notaSum += player.nota;
+        chosenSlot.remaining -= 1;
+    }
+}
+
 function buildTeamPlayers(players: IPlayer[], playersPerTeam: number) {
     const preview = calculateDrawPreview(players.length, playersPerTeam);
 
@@ -655,25 +738,42 @@ function buildTeamPlayers(players: IPlayer[], playersPerTeam: number) {
         });
     }
 
-    const menPlayers = shuffleArray(players.filter((player) => player.gender === "M"));
-    const womenPlayers = shuffleArray(players.filter((player) => player.gender === "F"));
+    const menPlayers = players.filter((player) => player.gender === "M");
+    const womenPlayers = players.filter((player) => player.gender === "F");
     const maleDistribution = buildProportionalMaleDistribution(
         preview.teamSizes,
         menPlayers.length
     );
 
-    return preview.teamSizes.map((teamSize, index) => {
-        const menInTeam = maleDistribution[index];
-        const womenInTeam = teamSize - menInTeam;
+    const menSlots: IGenderDistributionSlot[] = preview.teamSizes.map((_, index) => ({
+        index,
+        remaining: maleDistribution[index],
+        notaSum: 0,
+        tieBreaker: Math.random(),
+        players: [],
+    }));
+    const womenSlots: IGenderDistributionSlot[] = preview.teamSizes.map((teamSize, index) => ({
+        index,
+        remaining: teamSize - maleDistribution[index],
+        notaSum: 0,
+        tieBreaker: Math.random(),
+        players: [],
+    }));
+
+    distributePlayersByMinimumSum(sortPlayersByNotaDescWithTieShuffle(menPlayers), menSlots);
+    distributePlayersByMinimumSum(sortPlayersByNotaDescWithTieShuffle(womenPlayers), womenSlots);
+
+    return preview.teamSizes.map((_, index) => {
         const allocatedPlayers = shuffleArray([
-            ...menPlayers.splice(0, menInTeam),
-            ...womenPlayers.splice(0, womenInTeam),
+            ...menSlots[index].players,
+            ...womenSlots[index].players,
         ]).map((player, playerIndex) => ({
             allocationId: createLocalId("allocation"),
             playerId: player.id,
             playerName: player.name,
             normalizedName: player.normalizedName,
             gender: player.gender,
+            nota: player.nota,
             positionInTeam: playerIndex,
         }));
 
@@ -682,13 +782,19 @@ function buildTeamPlayers(players: IPlayer[], playersPerTeam: number) {
 }
 
 function recalculateTeam(team: IDrawTeam) {
-    const totalMen = team.players.filter((player) => player.gender === "M").length;
+    const menPlayers = team.players.filter((player) => player.gender === "M");
+    const womenPlayers = team.players.filter((player) => player.gender === "F");
+    const notaTotalMen = menPlayers.reduce((sum, player) => sum + player.nota, 0);
+    const notaTotalWomen = womenPlayers.reduce((sum, player) => sum + player.nota, 0);
 
     return {
         ...team,
         playerCount: team.players.length,
-        totalMen,
-        totalWomen: team.players.length - totalMen,
+        totalMen: menPlayers.length,
+        totalWomen: womenPlayers.length,
+        notaTotalMen,
+        notaTotalWomen,
+        notaTotal: notaTotalMen + notaTotalWomen,
         players: team.players.map((player, index) => ({
             ...player,
             positionInTeam: index,
@@ -708,7 +814,10 @@ function buildDrawResult(
     const resultId = createLocalId("result");
 
     const teams = groupedPlayers.map((teamPlayers, index) => {
-        const totalMen = teamPlayers.filter((player) => player.gender === "M").length;
+        const menPlayers = teamPlayers.filter((player) => player.gender === "M");
+        const womenPlayers = teamPlayers.filter((player) => player.gender === "F");
+        const notaTotalMen = menPlayers.reduce((sum, player) => sum + player.nota, 0);
+        const notaTotalWomen = womenPlayers.reduce((sum, player) => sum + player.nota, 0);
 
         return {
             id: createLocalId("team"),
@@ -719,8 +828,11 @@ function buildDrawResult(
             playerCount: teamPlayers.length,
             isOriginalIncompleteTeam:
                 preview.hasIncompleteTeam && index === groupedPlayers.length - 1,
-            totalMen,
-            totalWomen: teamPlayers.length - totalMen,
+            totalMen: menPlayers.length,
+            totalWomen: womenPlayers.length,
+            notaTotalMen,
+            notaTotalWomen,
+            notaTotal: notaTotalMen + notaTotalWomen,
             players: teamPlayers,
         } satisfies IDrawTeam;
     });
@@ -841,6 +953,7 @@ export async function createPlayer(data: ICreatePlayerRequest) {
     const players = readPlayersOrThrow();
     assertValidPlayerName(data.name);
     assertValidGender(data.gender);
+    assertValidNota(data.nota);
     const normalizedName = ensureUniquePlayerName(players, data.name);
     const now = new Date().toISOString();
 
@@ -849,6 +962,7 @@ export async function createPlayer(data: ICreatePlayerRequest) {
         name: sanitizePlayerName(data.name),
         normalizedName,
         gender: data.gender,
+        nota: data.nota,
         isActive: true,
         createdAt: now,
         updatedAt: now,
@@ -868,6 +982,7 @@ export async function updatePlayer(playerId: string, data: IUpdatePlayerRequest)
 
     assertValidPlayerName(data.name);
     assertValidGender(data.gender);
+    assertValidNota(data.nota);
     const normalizedName = ensureUniquePlayerName(players, data.name, playerId);
     const updatedPlayers = [...players];
     updatedPlayers[playerIndex] = {
@@ -875,6 +990,7 @@ export async function updatePlayer(playerId: string, data: IUpdatePlayerRequest)
         name: sanitizePlayerName(data.name),
         normalizedName,
         gender: data.gender,
+        nota: data.nota,
         updatedAt: new Date().toISOString(),
     };
 

@@ -349,7 +349,11 @@ export default function PlayersPage() {
         );
     };
 
-    const handleCreatePlayer = async (data: { name: string; gender: PlayerGender }) => {
+    const handleCreatePlayer = async (data: {
+        name: string;
+        gender: PlayerGender;
+        nota: number;
+    }) => {
         const createdPlayer = await createNewPlayer(data);
 
         if (!createdPlayer) {
@@ -360,7 +364,11 @@ export default function PlayersPage() {
         return true;
     };
 
-    const handleUpdatePlayer = async (data: { name: string; gender: PlayerGender }) => {
+    const handleUpdatePlayer = async (data: {
+        name: string;
+        gender: PlayerGender;
+        nota: number;
+    }) => {
         if (!selectedPlayer) {
             return false;
         }
@@ -556,6 +564,7 @@ export default function PlayersPage() {
                             fields={[
                                 { label: "Nome", value: player.name },
                                 { label: "Genero", value: formatGenderLabel(player.gender) },
+                                { label: "Nota", value: player.nota },
                                 {
                                     label: "Status",
                                     value: (
@@ -630,6 +639,7 @@ export default function PlayersPage() {
                             <TableRow>
                                 <TableCell>Nome</TableCell>
                                 <TableCell>Genero</TableCell>
+                                <TableCell align="center">Nota</TableCell>
                                 <TableCell>Status</TableCell>
                                 <TableCell>Atualizado em</TableCell>
                                 <TableCell align="center">Acoes</TableCell>
@@ -640,6 +650,7 @@ export default function PlayersPage() {
                                 <TableRow key={player.id} hover>
                                     <TableCell>{player.name}</TableCell>
                                     <TableCell>{formatGenderLabel(player.gender)}</TableCell>
+                                    <TableCell align="center">{player.nota}</TableCell>
                                     <TableCell>
                                         <Chip
                                             label={getStatusLabel(player.isActive)}
@@ -711,7 +722,7 @@ export default function PlayersPage() {
                             ))}
                             {players.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={5} align="center">
+                                    <TableCell colSpan={6} align="center">
                                         <Typography color="text.secondary" sx={{ py: 2 }}>
                                             Nenhum registro encontrado
                                         </Typography>

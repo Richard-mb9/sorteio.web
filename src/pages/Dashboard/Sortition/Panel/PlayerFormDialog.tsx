@@ -13,6 +13,9 @@ import TextField from "@mui/material/TextField";
 import { useState } from "react";
 import { toast } from "react-toastify";
 import {
+    DEFAULT_PLAYER_NOTA,
+    MAX_PLAYER_NOTA,
+    MIN_PLAYER_NOTA,
     normalizePlayerName,
     type IPlayer,
     type PlayerGender,
@@ -26,7 +29,7 @@ interface IPlayerFormDialogProps {
     player?: IPlayer | null;
     keepOpenAfterSubmit?: boolean;
     onClose: () => void;
-    onSubmit: (data: { name: string; gender: PlayerGender }) => Promise<boolean>;
+    onSubmit: (data: { name: string; gender: PlayerGender; nota: number }) => Promise<boolean>;
 }
 
 export default function PlayerFormDialog({
@@ -40,8 +43,10 @@ export default function PlayerFormDialog({
     onSubmit,
 }: IPlayerFormDialogProps) {
     const initialGender: PlayerGender = player?.gender || "M";
+    const initialNota = typeof player?.nota === "number" ? player.nota : DEFAULT_PLAYER_NOTA;
     const [name, setName] = useState(player?.name || "");
     const [gender, setGender] = useState<PlayerGender>(initialGender);
+    const [notaInput, setNotaInput] = useState<string>(String(initialNota));
 
     const validateForm = () => {
         if (!name.trim()) {
@@ -60,6 +65,17 @@ export default function PlayerFormDialog({
             return false;
         }
 
+        const parsedNota = Number(notaInput);
+        if (
+            notaInput.trim() === "" ||
+            !Number.isInteger(parsedNota) ||
+            parsedNota < MIN_PLAYER_NOTA ||
+            parsedNota > MAX_PLAYER_NOTA
+        ) {
+            toast.error(`Informe uma nota inteira entre ${MIN_PLAYER_NOTA} e ${MAX_PLAYER_NOTA}.`);
+            return false;
+        }
+
         return true;
     };
 
@@ -71,12 +87,14 @@ export default function PlayerFormDialog({
         const hasSaved = await onSubmit({
             name,
             gender,
+            nota: Number(notaInput),
         });
 
         if (hasSaved) {
             if (keepOpenAfterSubmit) {
                 setName("");
                 setGender("M");
+                setNotaInput(String(DEFAULT_PLAYER_NOTA));
                 return;
             }
 
@@ -108,6 +126,21 @@ export default function PlayerFormDialog({
                             <FormControlLabel value="F" control={<Radio />} label="Feminino" />
                         </RadioGroup>
                     </FormControl>
+                    <TextField
+                        label={`Nota (${MIN_PLAYER_NOTA} a ${MAX_PLAYER_NOTA})`}
+                        type="number"
+                        value={notaInput}
+                        onChange={(event) => setNotaInput(event.target.value)}
+                        inputProps={{
+                            min: MIN_PLAYER_NOTA,
+                            max: MAX_PLAYER_NOTA,
+                            step: 1,
+                            inputMode: "numeric",
+                        }}
+                        helperText="Nota tecnica inteira usada no balanceamento dos times."
+                        fullWidth
+                        required
+                    />
                 </Stack>
             </DialogContent>
             <DialogActions>

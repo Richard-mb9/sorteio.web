@@ -188,7 +188,11 @@ export default function SettingsPage() {
                         />
                     </CompactSection>
 
-                    <Stack direction="row" spacing={2} justifyContent="flex-end">
+                    <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={2}
+                        justifyContent={{ xs: "stretch", sm: "flex-end" }}
+                    >
                         <Button variant="contained" color="error" onClick={() => navigate(-1)}>
                             Cancelar
                         </Button>

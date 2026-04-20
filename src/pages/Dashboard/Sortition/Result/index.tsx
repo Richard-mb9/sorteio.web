@@ -326,6 +326,20 @@ export default function ResultPage() {
                                     label="Possui time incompleto"
                                     value={result.hasIncompleteTeam ? "Sim" : "Nao"}
                                 />
+                                <CompactInfoRow
+                                    label="Soma total das notas"
+                                    value={result.teams.reduce(
+                                        (sum, team) => sum + team.notaTotal,
+                                        0
+                                    )}
+                                />
+                                <CompactInfoRow
+                                    label="Diferenca entre maior e menor soma"
+                                    value={(() => {
+                                        const totals = result.teams.map((team) => team.notaTotal);
+                                        return Math.max(...totals) - Math.min(...totals);
+                                    })()}
+                                />
                             </CompactSection>
 
                             <Divider />
@@ -411,6 +425,16 @@ export default function ResultPage() {
                                             <Chip
                                                 label={`${team.totalWomen} mulheres`}
                                                 size="small"
+                                            />
+                                            <Chip
+                                                label={`Nota ${team.notaTotal}`}
+                                                size="small"
+                                                color="secondary"
+                                            />
+                                            <Chip
+                                                label={`M ${team.notaTotalMen} / F ${team.notaTotalWomen}`}
+                                                size="small"
+                                                variant="outlined"
                                             />
                                         </Stack>
                                     </Stack>
