@@ -49,6 +49,7 @@ export default function SettingsPage() {
 
         if (currentSnapshot) {
             setSnapshot(currentSnapshot);
+            setPlayersPerTeam(currentSnapshot.configuration?.playersPerTeam?.toString() || "");
         }
     }
 
@@ -64,10 +65,6 @@ export default function SettingsPage() {
         run();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [canManage]);
-
-    useEffect(() => {
-        setPlayersPerTeam(snapshot?.configuration?.playersPerTeam?.toString() || "");
-    }, [snapshot]);
 
     const validateConfiguration = () => {
         if (!isValidConfiguration) {

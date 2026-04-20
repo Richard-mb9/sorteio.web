@@ -58,12 +58,151 @@ import PlayerFormDialog from "../Sortition/Panel/PlayerFormDialog";
 
 type PlayerStatusFilter = "active" | "inactive";
 
+interface IPlayersFiltersFormProps {
+    appliedAdvancedFilters: string[];
+    advancedActiveCount: number;
+    initialSearch: string;
+    initialGender?: PlayerGender;
+    initialStatus?: PlayerStatusFilter;
+    rowsPerPage: number;
+    onClearAdvancedFilters: () => void;
+    onSubmitFilters: (filters: {
+        search: string;
+        gender?: PlayerGender;
+        status?: PlayerStatusFilter;
+    }) => void;
+}
+
 function getStatusLabel(isActive: boolean) {
     return isActive ? "Ativo" : "Inativo";
 }
 
 function getStatusColor(isActive: boolean): "success" | "default" {
     return isActive ? "success" : "default";
+}
+
+function PlayersFiltersForm({
+    appliedAdvancedFilters,
+    advancedActiveCount,
+    initialSearch,
+    initialGender,
+    initialStatus,
+    onClearAdvancedFilters,
+    onSubmitFilters,
+}: IPlayersFiltersFormProps) {
+    const [formSearch, setFormSearch] = useState(initialSearch);
+    const [formGender, setFormGender] = useState<PlayerGender | "">(initialGender || "");
+    const [formStatus, setFormStatus] = useState<PlayerStatusFilter | "">(initialStatus || "");
+    const [showAdvancedFilters, setShowAdvancedFilters] = useState(
+        Boolean(initialGender || initialStatus)
+    );
+
+    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        onSubmitFilters({
+            search: formSearch.trim(),
+            gender: formGender || undefined,
+            status: formStatus || undefined,
+        });
+    };
+
+    const handleClear = () => {
+        setFormGender("");
+        setFormStatus("");
+        onClearAdvancedFilters();
+    };
+
+    return (
+        <Paper component="form" onSubmit={handleSubmit} sx={{ p: 2, mb: 2 }}>
+            <Stack spacing={2}>
+                <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    spacing={2}
+                    alignItems={{ xs: "stretch", md: "center" }}
+                >
+                    <TextField
+                        label="Buscar jogador"
+                        value={formSearch}
+                        onChange={(event) => setFormSearch(event.target.value)}
+                        fullWidth
+                    />
+                    <Stack direction="row" spacing={1} sx={{ width: { xs: "100%", md: "auto" } }}>
+                        <Button
+                            type="submit"
+                            variant="contained"
+                            startIcon={<SearchIcon />}
+                            sx={{ flexGrow: { xs: 1, md: 0 } }}
+                        >
+                            Pesquisar
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outlined"
+                            size="small"
+                            startIcon={<FilterAltIcon />}
+                            onClick={() => setShowAdvancedFilters((previous) => !previous)}
+                        >
+                            Filtros
+                        </Button>
+                        {advancedActiveCount > 0 && (
+                            <Chip label={advancedActiveCount} size="small" color="primary" />
+                        )}
+                    </Stack>
+                </Stack>
+
+                {advancedActiveCount > 0 && (
+                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                        {appliedAdvancedFilters.map((label) => (
+                            <Chip key={label} label={label} size="small" />
+                        ))}
+                    </Stack>
+                )}
+
+                <Collapse in={showAdvancedFilters}>
+                    <Divider sx={{ mb: 2 }} />
+                    <Stack spacing={2}>
+                        <FormControl fullWidth>
+                            <InputLabel>Genero</InputLabel>
+                            <Select
+                                value={formGender}
+                                label="Genero"
+                                onChange={(event) =>
+                                    setFormGender((event.target.value as PlayerGender | "") || "")
+                                }
+                            >
+                                <MenuItem value="">Todos</MenuItem>
+                                <MenuItem value="M">Masculino</MenuItem>
+                                <MenuItem value="F">Feminino</MenuItem>
+                            </Select>
+                        </FormControl>
+
+                        <FormControl fullWidth>
+                            <InputLabel>Status</InputLabel>
+                            <Select
+                                value={formStatus}
+                                label="Status"
+                                onChange={(event) =>
+                                    setFormStatus(
+                                        (event.target.value as PlayerStatusFilter | "") || ""
+                                    )
+                                }
+                            >
+                                <MenuItem value="">Todos</MenuItem>
+                                <MenuItem value="active">Ativos</MenuItem>
+                                <MenuItem value="inactive">Inativos</MenuItem>
+                            </Select>
+                        </FormControl>
+
+                        <Stack direction="row" justifyContent="flex-end">
+                            <Button type="button" size="small" onClick={handleClear}>
+                                Limpar filtros
+                            </Button>
+                        </Stack>
+                    </Stack>
+                </Collapse>
+            </Stack>
+        </Paper>
+    );
 }
 
 export default function PlayersPage() {
@@ -100,12 +239,6 @@ export default function PlayersPage() {
     const appliedIsActive =
         appliedStatus === "active" ? true : appliedStatus === "inactive" ? false : undefined;
 
-    const [formSearch, setFormSearch] = useState(appliedSearch);
-    const [formGender, setFormGender] = useState<PlayerGender | "">(appliedGender || "");
-    const [formStatus, setFormStatus] = useState<PlayerStatusFilter | "">(appliedStatus || "");
-    const [showAdvancedFilters, setShowAdvancedFilters] = useState(
-        Boolean(appliedGender || appliedStatus)
-    );
     const [snapshot, setSnapshot] = useState<IApplicationSnapshot | null>(null);
     const [players, setPlayers] = useState<IPlayer[]>([]);
     const [totalCount, setTotalCount] = useState(0);
@@ -128,12 +261,6 @@ export default function PlayersPage() {
         allPlayers,
         snapshot?.configuration || null
     );
-
-    useEffect(() => {
-        setFormSearch(appliedSearch);
-        setFormGender(appliedGender || "");
-        setFormStatus(appliedStatus || "");
-    }, [appliedSearch, appliedGender, appliedStatus]);
 
     async function refreshData() {
         const currentSnapshot = await getApplicationStateSnapshot();
@@ -169,13 +296,16 @@ export default function PlayersPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, rowsPerPage, appliedSearch, appliedGender, appliedIsActive, canRead]);
 
-    const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
+    const handleSearchSubmit = (filters: {
+        search: string;
+        gender?: PlayerGender;
+        status?: PlayerStatusFilter;
+    }) => {
         setSearchParams(
             updateUrlSearchParams(searchParams, {
-                search: formSearch.trim(),
-                gender: formGender || undefined,
-                status: formStatus || undefined,
+                search: filters.search,
+                gender: filters.gender,
+                status: filters.status,
                 page: 0,
                 perPage: rowsPerPage,
             })
@@ -183,8 +313,6 @@ export default function PlayersPage() {
     };
 
     const handleClearAdvancedFilters = () => {
-        setFormGender("");
-        setFormStatus("");
         setSearchParams(
             updateUrlSearchParams(searchParams, {
                 gender: undefined,
@@ -390,105 +518,17 @@ export default function PlayersPage() {
                 </Stack>
             </Paper>
 
-            <Paper component="form" onSubmit={handleSearchSubmit} sx={{ p: 2, mb: 2 }}>
-                <Stack spacing={2}>
-                    <Stack
-                        direction={{ xs: "column", md: "row" }}
-                        spacing={2}
-                        alignItems={{ xs: "stretch", md: "center" }}
-                    >
-                        <TextField
-                            label="Buscar jogador"
-                            value={formSearch}
-                            onChange={(event) => setFormSearch(event.target.value)}
-                            fullWidth
-                        />
-                        <Stack
-                            direction="row"
-                            spacing={1}
-                            sx={{ width: { xs: "100%", md: "auto" } }}
-                        >
-                            <Button
-                                type="submit"
-                                variant="contained"
-                                startIcon={<SearchIcon />}
-                                sx={{ flexGrow: { xs: 1, md: 0 } }}
-                            >
-                                Pesquisar
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="outlined"
-                                size="small"
-                                startIcon={<FilterAltIcon />}
-                                onClick={() => setShowAdvancedFilters((previous) => !previous)}
-                            >
-                                Filtros
-                            </Button>
-                            {advancedActiveCount > 0 && (
-                                <Chip label={advancedActiveCount} size="small" color="primary" />
-                            )}
-                        </Stack>
-                    </Stack>
-
-                    {advancedActiveCount > 0 && (
-                        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                            {appliedAdvancedFilters.map((label) => (
-                                <Chip key={label} label={label} size="small" />
-                            ))}
-                        </Stack>
-                    )}
-
-                    <Collapse in={showAdvancedFilters}>
-                        <Divider sx={{ mb: 2 }} />
-                        <Stack spacing={2}>
-                            <FormControl fullWidth>
-                                <InputLabel>Genero</InputLabel>
-                                <Select
-                                    value={formGender}
-                                    label="Genero"
-                                    onChange={(event) =>
-                                        setFormGender(
-                                            (event.target.value as PlayerGender | "") || ""
-                                        )
-                                    }
-                                >
-                                    <MenuItem value="">Todos</MenuItem>
-                                    <MenuItem value="M">Masculino</MenuItem>
-                                    <MenuItem value="F">Feminino</MenuItem>
-                                </Select>
-                            </FormControl>
-
-                            <FormControl fullWidth>
-                                <InputLabel>Status</InputLabel>
-                                <Select
-                                    value={formStatus}
-                                    label="Status"
-                                    onChange={(event) =>
-                                        setFormStatus(
-                                            (event.target.value as PlayerStatusFilter | "") || ""
-                                        )
-                                    }
-                                >
-                                    <MenuItem value="">Todos</MenuItem>
-                                    <MenuItem value="active">Ativos</MenuItem>
-                                    <MenuItem value="inactive">Inativos</MenuItem>
-                                </Select>
-                            </FormControl>
-
-                            <Stack direction="row" justifyContent="flex-end">
-                                <Button
-                                    type="button"
-                                    size="small"
-                                    onClick={handleClearAdvancedFilters}
-                                >
-                                    Limpar filtros
-                                </Button>
-                            </Stack>
-                        </Stack>
-                    </Collapse>
-                </Stack>
-            </Paper>
+            <PlayersFiltersForm
+                key={`${appliedSearch}|${appliedGender || ""}|${appliedStatus || ""}`}
+                appliedAdvancedFilters={appliedAdvancedFilters}
+                advancedActiveCount={advancedActiveCount}
+                initialSearch={appliedSearch}
+                initialGender={appliedGender}
+                initialStatus={appliedStatus}
+                rowsPerPage={rowsPerPage}
+                onClearAdvancedFilters={handleClearAdvancedFilters}
+                onSubmitFilters={handleSearchSubmit}
+            />
 
             {isMobile ? (
                 <Box>
