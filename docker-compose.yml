@@ -1,0 +1,23 @@
+services:
+  sorteio-web:
+    container_name: sorteio-web
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      additional_contexts:
+        src: .     
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: "0.25"
+    networks:
+      - sorteio_net
+
+
+
+networks:
+  sorteio_net:
+    driver: bridge
+    name: sorteio_net
+
