@@ -86,7 +86,7 @@ export default function PanelPage() {
 
         if (response) {
             await refreshSnapshot();
-            navigate("/resultado");
+            navigate("/rotacao");
         }
 
         setNewDrawDialogOpen(false);
@@ -172,14 +172,14 @@ export default function PanelPage() {
             {isResultOutdated && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
                     O resultado salvo pode ter sido gerado com base em um conjunto anterior de
-                    jogadores ativos ou configuracao.
+                    jogadores ativos ou configuração.
                 </Alert>
             )}
 
             {inactivePlayersCount > 0 && (
                 <Alert severity="info" sx={{ mb: 2 }}>
-                    Jogadores inativos nao entram na lista elegivel do sorteio e sao ignorados em
-                    todo o calculo dos times.
+                    Jogadores inativos não entram na lista elegível do sorteio e são ignorados em
+                    todo o cálculo dos times.
                 </Alert>
             )}
 
@@ -191,8 +191,8 @@ export default function PanelPage() {
 
             {configuration && !drawPreview.isEligible && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
-                    Nao ha jogadores suficientes para iniciar o sorteio. Atual:{" "}
-                    {activePlayers.length}. Minimo necessario: {drawPreview.minimumPlayersNeeded}.
+                    Não há jogadores suficientes para iniciar o sorteio. Atual:{" "}
+                    {activePlayers.length}. Mínimo necessário: {drawPreview.minimumPlayersNeeded}.
                 </Alert>
             )}
 
@@ -227,31 +227,45 @@ export default function PanelPage() {
                         />
                         <CompactInfoRow
                             label="Jogadores por time"
-                            value={configuration?.playersPerTeam || "Nao definido"}
+                            value={configuration?.playersPerTeam || "Não definido"}
                         />
                         <CompactInfoRow
-                            label="Minimo para sortear"
+                            label="Mínimo para sortear"
                             value={
                                 configuration?.playersPerTeam
                                     ? configuration.playersPerTeam * 2
-                                    : "Nao definido"
+                                    : "Não definido"
+                            }
+                        />
+                        <CompactInfoRow
+                            label="Máximo de vitórias por time"
+                            value={configuration?.maxConsecutiveWins || "Não definido"}
+                        />
+                        <CompactInfoRow
+                            label="Saida dupla no limite"
+                            value={configuration?.doubleExitOnMaxWins ? "Ativada" : "Desativada"}
+                        />
+                        <CompactInfoRow
+                            label="Aleatoriedade na rotação dos times"
+                            value={
+                                configuration?.rotationRandomnessEnabled ? "Ativada" : "Desativada"
                             }
                         />
                         <CompactInfoRow label="Status do resultado" value={resultStatusLabel} />
                     </CompactSection>
 
-                    <CompactSection title="Previsao estrutural">
+                    <CompactSection title="Previsão estrutural">
                         <CompactInfoRow
                             label="Quantidade prevista de times"
                             value={drawPreview.totalTeams}
                         />
                         <CompactInfoRow
-                            label="Divisao exata"
-                            value={drawPreview.exactDivision ? "Sim" : "Nao"}
+                            label="Divisão exata"
+                            value={drawPreview.exactDivision ? "Sim" : "Não"}
                         />
                         <CompactInfoRow
                             label="Havera time incompleto"
-                            value={drawPreview.hasIncompleteTeam ? "Sim" : "Nao"}
+                            value={drawPreview.hasIncompleteTeam ? "Sim" : "Não"}
                         />
                         <CompactInfoRow
                             label="Quantidade prevista no ultimo time"
@@ -295,9 +309,9 @@ export default function PanelPage() {
                             <Button
                                 variant="outlined"
                                 startIcon={<EmojiEventsIcon />}
-                                onClick={() => navigate("/resultado")}
+                                onClick={() => navigate("/rotacao")}
                             >
-                                Abrir resultado
+                                Abrir rotação
                             </Button>
                         )}
                         {(result || snapshot?.restoration.hasInvalidStoredResult) && canManage && (
@@ -317,7 +331,7 @@ export default function PanelPage() {
             <ConfirmDialog
                 open={newDrawDialogOpen}
                 title="Confirmar novo sorteio"
-                message="O resultado atual sera descartado. Os jogadores ativos e a configuracao atuais serao reaproveitados."
+                message="O resultado atual será descartado. Os jogadores ativos e a configuração atuais serão reaproveitados."
                 confirmLabel="Confirmar novo sorteio"
                 onConfirm={() => {
                     void handleGenerateDraw();
@@ -328,7 +342,7 @@ export default function PanelPage() {
             <ConfirmDialog
                 open={clearResultDialogOpen}
                 title="Limpar resultado"
-                message="Somente o resultado sera apagado. Os jogadores cadastrados e a configuracao do sorteio serao preservados."
+                message="Somente o resultado será apagado. Os jogadores cadastrados e a configuração do sorteio serão preservados."
                 confirmLabel="Limpar resultado"
                 onConfirm={() => {
                     void handleClearResult();

@@ -1,5 +1,6 @@
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import GroupsIcon from "@mui/icons-material/Groups";
+import LeaderboardIcon from "@mui/icons-material/Leaderboard";
 import MenuIcon from "@mui/icons-material/Menu";
 import SportsVolleyballIcon from "@mui/icons-material/SportsVolleyball";
 import TuneIcon from "@mui/icons-material/Tune";
@@ -19,6 +20,7 @@ import LinkDashboardMenu from "../components/linkDashboardMenu";
 import UsernameDisplay from "../components/UsernameDisplay";
 import PlayersPage from "./Players";
 import PanelPage from "./Sortition/Panel";
+import RankingPage from "./Sortition/Ranking";
 import ResultPage from "./Sortition/Result";
 import SettingsPage from "./Sortition/Settings";
 
@@ -27,8 +29,9 @@ const drawerWidth = 280;
 const pageTitles: Record<string, string> = {
     "/painel": "Painel do Sorteio",
     "/jogadores": "Jogadores",
-    "/configuracoes": "Configuracoes do Sorteio",
-    "/resultado": "Resultado do Sorteio",
+    "/configuracoes": "Configurações do Sorteio",
+    "/rotacao": "Rotação de Partidas",
+    "/ranking": "Ranking",
 };
 
 function getPageTitle(pathname: string) {
@@ -91,14 +94,19 @@ export default function Dashboard() {
                             icon: <ViewListIcon color="primary" />,
                         },
                         {
-                            text: "Configuracoes",
+                            text: "Configurações",
                             to: "/configuracoes",
                             icon: <TuneIcon color="primary" />,
                         },
                         {
-                            text: "Resultado",
-                            to: "/resultado",
+                            text: "Rotação",
+                            to: "/rotacao",
                             icon: <EmojiEventsIcon color="primary" />,
+                        },
+                        {
+                            text: "Ranking",
+                            to: "/ranking",
+                            icon: <LeaderboardIcon color="primary" />,
                         },
                     ]}
                 />
@@ -143,7 +151,7 @@ export default function Dashboard() {
             >
                 <Toolbar sx={{ justifyContent: "space-between" }}>
                     <Typography variant="body1" color="text.secondary">
-                        Modulo local sem autenticacao
+                        Módulo local sem autenticação
                     </Typography>
                     <UsernameDisplay />
                 </Toolbar>
@@ -152,7 +160,7 @@ export default function Dashboard() {
             <Box
                 component="nav"
                 sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
-                aria-label="Menu de navegacao"
+                aria-label="Menu de navegação"
             >
                 <Drawer
                     variant="temporary"
@@ -197,7 +205,9 @@ export default function Dashboard() {
                     <Route element={<PanelPage />} path="/painel" />
                     <Route element={<PlayersPage />} path="/jogadores" />
                     <Route element={<SettingsPage />} path="/configuracoes" />
-                    <Route element={<ResultPage />} path="/resultado" />
+                    <Route element={<ResultPage />} path="/rotacao" />
+                    <Route element={<Navigate replace to="/rotacao" />} path="/resultado" />
+                    <Route element={<RankingPage />} path="/ranking" />
                 </Routes>
             </Box>
         </Box>

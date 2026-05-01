@@ -74,7 +74,7 @@ export default function MobileCard({
                     <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
                         <IconButton
                             size="small"
-                            aria-label="Abrir menu de acoes"
+                            aria-label="Abrir menu de ações"
                             onClick={(event) => setAnchorEl(event.currentTarget)}
                         >
                             <MoreVertIcon fontSize="small" />

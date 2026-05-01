@@ -8,6 +8,7 @@ import {
 } from "../commons/sortition";
 import {
     type IClearPlayersResponse,
+    type IConfirmMatchWinnerRequest,
     type IConfirmManualSwapRequest,
     type ICreatePlayerRequest,
     type IGenerateDrawResponse,
@@ -19,6 +20,7 @@ import {
     clearDrawResult,
     clearPlayers,
     confirmManualSwap,
+    confirmMatchWinner,
     createPlayer,
     deletePlayer,
     generateDraw,
@@ -50,16 +52,17 @@ interface IUseSortition {
     generateNewDraw: () => Promise<IGenerateDrawResponse | undefined>;
     clearExistingResult: () => Promise<boolean>;
     confirmDrawSwap: (data: IConfirmManualSwapRequest) => Promise<IDrawResult | undefined>;
+    confirmWinner: (data: IConfirmMatchWinnerRequest) => Promise<IDrawResult | undefined>;
 }
 
 function getStorageErrorMessage() {
-    return "Nao foi possivel carregar os dados salvos.";
+    return "Não foi possível carregar os dados salvos.";
 }
 
 function getDrawIneligibleMessage(error: SortitionDomainError) {
     const currentPlayers = Number(error.details?.currentPlayers || 0);
     const minimumPlayers = Number(error.details?.minimumPlayers || 0);
-    return `Nao ha jogadores suficientes para iniciar o sorteio. Atual: ${currentPlayers}. Minimo necessario: ${minimumPlayers}.`;
+    return `Não há jogadores suficientes para iniciar o sorteio. Atual: ${currentPlayers}. Mínimo necessário: ${minimumPlayers}.`;
 }
 
 export default function useSortition(): IUseSortition {
@@ -108,7 +111,7 @@ export default function useSortition(): IUseSortition {
                 }
 
                 if (error.code === SORTITION_ERROR_CODES.playerGenderRequired) {
-                    toast.error("Selecione o genero do jogador.");
+                    toast.error("Selecione o gênero do jogador.");
                     return;
                 }
 
@@ -123,7 +126,7 @@ export default function useSortition(): IUseSortition {
                 }
             }
 
-            toast.error("Nao foi possivel salvar o jogador.");
+            toast.error("Não foi possível salvar o jogador.");
             return;
         } finally {
             setIsLoading(false);
@@ -149,7 +152,7 @@ export default function useSortition(): IUseSortition {
                 }
 
                 if (error.code === SORTITION_ERROR_CODES.playerGenderRequired) {
-                    toast.error("Selecione o genero do jogador.");
+                    toast.error("Selecione o gênero do jogador.");
                     return;
                 }
 
@@ -164,7 +167,7 @@ export default function useSortition(): IUseSortition {
                 }
             }
 
-            toast.error("Nao foi possivel atualizar o jogador.");
+            toast.error("Não foi possível atualizar o jogador.");
             return;
         } finally {
             setIsLoading(false);
@@ -186,7 +189,7 @@ export default function useSortition(): IUseSortition {
                 return false;
             }
 
-            toast.error("Nao foi possivel remover o jogador.");
+            toast.error("Não foi possível remover o jogador.");
             return false;
         } finally {
             setIsLoading(false);
@@ -212,8 +215,8 @@ export default function useSortition(): IUseSortition {
 
             toast.error(
                 isActive
-                    ? "Nao foi possivel ativar o jogador."
-                    : "Nao foi possivel inativar o jogador."
+                    ? "Não foi possível ativar o jogador."
+                    : "Não foi possível inativar o jogador."
             );
             return;
         } finally {
@@ -235,7 +238,7 @@ export default function useSortition(): IUseSortition {
 
             return response;
         } catch {
-            toast.error("Nao foi possivel limpar a lista de jogadores.");
+            toast.error("Não foi possível limpar a lista de jogadores.");
             return;
         } finally {
             setIsLoading(false);
@@ -246,7 +249,7 @@ export default function useSortition(): IUseSortition {
         try {
             setIsLoading(true);
             const configuration = await saveConfiguration(data);
-            toast.success("Configuracao salva com sucesso.");
+            toast.success("Configuração salva com sucesso.");
             return configuration;
         } catch (error) {
             if (
@@ -257,7 +260,7 @@ export default function useSortition(): IUseSortition {
                 return;
             }
 
-            toast.error("Nao foi possivel salvar a configuracao.");
+            toast.error("Não foi possível salvar a configuração.");
             return;
         } finally {
             setIsLoading(false);
@@ -292,7 +295,7 @@ export default function useSortition(): IUseSortition {
                 }
             }
 
-            toast.error("Nao foi possivel gerar o sorteio.");
+            toast.error("Não foi possível gerar o sorteio.");
             return;
         } finally {
             setIsLoading(false);
@@ -310,11 +313,11 @@ export default function useSortition(): IUseSortition {
                 error instanceof SortitionDomainError &&
                 error.code === SORTITION_ERROR_CODES.resultNotFound
             ) {
-                toast.error("Nao existe resultado salvo para limpar.");
+                toast.error("Não existe resultado salvo para limpar.");
                 return false;
             }
 
-            toast.error("Nao foi possivel limpar o resultado.");
+            toast.error("Não foi possível limpar o resultado.");
             return false;
         } finally {
             setIsLoading(false);
@@ -330,7 +333,7 @@ export default function useSortition(): IUseSortition {
         } catch (error) {
             if (error instanceof SortitionDomainError) {
                 if (error.code === SORTITION_ERROR_CODES.resultNotFound) {
-                    toast.error("Nao existe resultado salvo para editar.");
+                    toast.error("Não existe resultado salvo para editar.");
                     return;
                 }
 
@@ -340,7 +343,7 @@ export default function useSortition(): IUseSortition {
                 }
 
                 if (error.code === SORTITION_ERROR_CODES.swapSameTeam) {
-                    toast.error("Nao e permitido trocar jogadores do mesmo time.");
+                    toast.error("Não é permitido trocar jogadores do mesmo time.");
                     return;
                 }
 
@@ -353,7 +356,36 @@ export default function useSortition(): IUseSortition {
                 }
             }
 
-            toast.error("Nao foi possivel confirmar a troca.");
+            toast.error("Não foi possível confirmar a troca.");
+            return;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const confirmWinner = async (data: IConfirmMatchWinnerRequest) => {
+        try {
+            setIsLoading(true);
+            const result = await confirmMatchWinner(data);
+            toast.success("Resultado da partida confirmado.");
+            return result;
+        } catch (error) {
+            if (error instanceof SortitionDomainError) {
+                if (error.code === SORTITION_ERROR_CODES.resultNotFound) {
+                    toast.error("Não existe rotação salva para atualizar.");
+                    return;
+                }
+
+                if (
+                    error.code === SORTITION_ERROR_CODES.winnerInvalid ||
+                    error.code === SORTITION_ERROR_CODES.resultInvalid
+                ) {
+                    toast.error("Selecione um time em partida para confirmar a vitória.");
+                    return;
+                }
+            }
+
+            toast.error("Não foi possível confirmar o vencedor.");
             return;
         } finally {
             setIsLoading(false);
@@ -372,5 +404,6 @@ export default function useSortition(): IUseSortition {
         generateNewDraw,
         clearExistingResult,
         confirmDrawSwap,
+        confirmWinner,
     };
 }

@@ -28,7 +28,7 @@ export default function ConfirmDialog({
         <Dialog open={open} onClose={onCancel} fullWidth maxWidth="xs">
             <DialogTitle>{title}</DialogTitle>
             <DialogContent>
-                <DialogContentText>{message}</DialogContentText>
+                <DialogContentText sx={{ whiteSpace: "pre-line" }}>{message}</DialogContentText>
             </DialogContent>
             <DialogActions>
                 <Button onClick={onCancel}>{cancelLabel}</Button>

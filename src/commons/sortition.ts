@@ -5,6 +5,7 @@ export type RestorationStatus = "success" | "empty" | "read-error" | "invalid-re
 export const MIN_PLAYER_NOTA = 0;
 export const MAX_PLAYER_NOTA = 10;
 export const DEFAULT_PLAYER_NOTA = 0;
+export const DEFAULT_MAX_CONSECUTIVE_WINS = 2;
 
 export interface IPlayer {
     id: string;
@@ -20,6 +21,9 @@ export interface IPlayer {
 export interface IDrawConfiguration {
     id: string;
     playersPerTeam: number | null;
+    maxConsecutiveWins: number;
+    doubleExitOnMaxWins: boolean;
+    rotationRandomnessEnabled: boolean;
     updatedAt: string;
 }
 
@@ -44,6 +48,91 @@ export interface IManualSwapImpact {
     updatedAt: string;
 }
 
+export type AutomaticSubstitutionReason = "EXCESS_ROTATION" | "PLAYER_INACTIVATION";
+
+export interface ISubstitutionPlayerSnapshot {
+    playerId: string;
+    playerName: string;
+    gender: PlayerGender;
+    nota: number;
+}
+
+export interface IRotationPlayerStats {
+    playerId: string;
+    timesRemoved: number;
+    removedRounds: number[];
+    lastRemovedRound: number | null;
+    lastEnteredRound: number | null;
+    returnedAsExcessRound: number | null;
+    manualSwapRounds: number[];
+}
+
+export interface IAutomaticSubstitutionHistory {
+    id: string;
+    roundNumber: number;
+    teamId: string;
+    teamLabel: string;
+    reason: AutomaticSubstitutionReason;
+    enteringPlayers: ISubstitutionPlayerSnapshot[];
+    leavingPlayers: ISubstitutionPlayerSnapshot[];
+    createdAt: string;
+}
+
+export interface IManualSwapHistory {
+    id: string;
+    roundNumber: number;
+    firstGroupId: string;
+    firstGroupLabel: string;
+    firstPlayerId: string;
+    firstPlayerName: string;
+    secondGroupId: string;
+    secondGroupLabel: string;
+    secondPlayerId: string;
+    secondPlayerName: string;
+    createdAt: string;
+}
+
+export interface IMatchHistory {
+    id: string;
+    roundNumber: number;
+    winnerTeamId: string;
+    winnerTeamLabel: string;
+    loserTeamId: string;
+    loserTeamLabel: string;
+    winnerPlayerIds: string[];
+    loserPlayerIds: string[];
+    winnerPlayers: string[];
+    loserPlayers: string[];
+    winnerWinsBefore: number;
+    winnerWinsAfter: number;
+    maxConsecutiveWins: number;
+    reachedWinLimit: boolean;
+    doubleExitApplied: boolean;
+    exitedTeamIds: string[];
+    createdAt: string;
+}
+
+export interface IPlannedSubstitution {
+    teamId: string;
+    teamLabel: string;
+    enteringPlayers: IAllocatedPlayer[];
+    leavingPlayers: IAllocatedPlayer[];
+    resultingPlayers: IAllocatedPlayer[];
+}
+
+export interface IRotationSummary {
+    roundNumber: number;
+    winnerTeamId: string;
+    winnerTeamLabel: string;
+    loserTeamId: string;
+    loserTeamLabel: string;
+    exitedTeamLabels: string[];
+    enteredTeamLabels: string[];
+    reachedWinLimit: boolean;
+    doubleExitApplied: boolean;
+    createdAt: string;
+}
+
 export interface IDrawTeam {
     id: string;
     resultId: string;
@@ -57,6 +146,7 @@ export interface IDrawTeam {
     notaTotalMen: number;
     notaTotalWomen: number;
     notaTotal: number;
+    currentWins: number;
     players: IAllocatedPlayer[];
 }
 
@@ -74,6 +164,14 @@ export interface IDrawResult {
     createdAt: string;
     updatedAt: string;
     teams: IDrawTeam[];
+    excessPlayers: IAllocatedPlayer[];
+    roundNumber: number;
+    playerStats: Record<string, IRotationPlayerStats>;
+    substitutionHistory: IAutomaticSubstitutionHistory[];
+    manualSwapHistory: IManualSwapHistory[];
+    matchHistory: IMatchHistory[];
+    upcomingSubstitutions: IPlannedSubstitution[];
+    lastRotationSummary: IRotationSummary | null;
     lastSwapImpact: IManualSwapImpact | null;
 }
 
@@ -258,11 +356,29 @@ export function isDrawResultOutdated(
         .map((player) => `${player.id}:${player.name}:${player.gender}:${player.nota}`)
         .join("|");
 
-    const resultSignature = result.teams
-        .flatMap((team) => team.players)
+    const resultSignature = [
+        ...result.teams.flatMap((team) => team.players),
+        ...result.excessPlayers,
+    ]
         .sort((playerA, playerB) => playerA.playerId.localeCompare(playerB.playerId))
         .map((player) => `${player.playerId}:${player.playerName}:${player.gender}:${player.nota}`)
         .join("|");
 
     return currentSignature !== resultSignature;
+}
+
+export function getCurrentMatchTeams(result: IDrawResult | null) {
+    return result?.teams.slice(0, 2) || [];
+}
+
+export function getNextRotationTeams(result: IDrawResult | null) {
+    return result?.teams.slice(2) || [];
+}
+
+export function formatAllocatedPlayerList(players: IAllocatedPlayer[]) {
+    if (players.length === 0) {
+        return "-";
+    }
+
+    return players.map((player) => player.playerName).join(", ");
 }

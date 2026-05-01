@@ -495,15 +495,15 @@ export default function PlayersPage() {
 
             {isResultOutdated && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
-                    O resultado salvo pode ter sido afetado por alteracoes na lista de jogadores
+                    O resultado salvo pode ter sido afetado por alterações na lista de jogadores
                     ativos.
                 </Alert>
             )}
 
             {inactivePlayersCount > 0 && (
                 <Alert severity="info" sx={{ mb: 2 }}>
-                    Jogadores inativos ficam cadastrados, mas sao ignorados no sorteio e em todo o
-                    calculo da formacao dos times.
+                    Jogadores inativos ficam cadastrados, mas são ignorados no sorteio e em todo o
+                    cálculo da formação dos times.
                 </Alert>
             )}
 
@@ -541,11 +541,11 @@ export default function PlayersPage() {
             {isMobile ? (
                 <Box>
                     <FormControl size="small" sx={{ minWidth: 160, mb: 2 }}>
-                        <InputLabel id="players-per-page-label">Linhas por pagina</InputLabel>
+                        <InputLabel id="players-per-page-label">Linhas por página</InputLabel>
                         <Select
                             labelId="players-per-page-label"
                             value={String(rowsPerPage)}
-                            label="Linhas por pagina"
+                            label="Linhas por página"
                             onChange={(event) =>
                                 handleMobileRowsPerPageChange(Number(event.target.value))
                             }
@@ -739,7 +739,7 @@ export default function PlayersPage() {
                         page={page}
                         onPageChange={handleChangePage}
                         onRowsPerPageChange={handleChangeRowsPerPage}
-                        labelRowsPerPage="Linhas por pagina:"
+                        labelRowsPerPage="Linhas por página:"
                         labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
                     />
                 </TableContainer>
@@ -760,7 +760,7 @@ export default function PlayersPage() {
                 key={`${selectedPlayer?.id || "edit"}-${editDialogOpen ? "open" : "closed"}`}
                 open={editDialogOpen}
                 title="Editar jogador"
-                submitLabel="Salvar alteracoes"
+                submitLabel="Salvar alterações"
                 players={allPlayers}
                 player={selectedPlayer}
                 onClose={() => {
@@ -772,7 +772,7 @@ export default function PlayersPage() {
 
             <ConfirmDialog
                 open={deleteDialogOpen}
-                title="Confirmar remocao"
+                title="Confirmar remoção"
                 message={`Tem certeza que deseja remover "${selectedPlayer?.name || "este jogador"}"?`}
                 confirmLabel="Remover"
                 onConfirm={() => {
@@ -787,7 +787,7 @@ export default function PlayersPage() {
             <ConfirmDialog
                 open={clearPlayersDialogOpen}
                 title="Limpar jogadores"
-                message={`Voce vai remover ${allPlayers.length} jogadores. A configuracao sera mantida e qualquer resultado salvo sera limpo.`}
+                message={`Você vai remover ${allPlayers.length} jogadores. A configuração será mantida e qualquer resultado salvo será limpo.`}
                 confirmLabel="Confirmar limpeza"
                 onConfirm={() => {
                     void handleClearPlayers();

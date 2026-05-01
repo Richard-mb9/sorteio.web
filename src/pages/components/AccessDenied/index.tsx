@@ -12,7 +12,7 @@ interface IAccessDeniedProps {
 }
 
 export default function AccessDenied({
-    message = "Voce nao tem permissao para acessar esta pagina.",
+    message = "Você não tem permissão para acessar esta página.",
 }: IAccessDeniedProps) {
     const navigate = useNavigate();
 

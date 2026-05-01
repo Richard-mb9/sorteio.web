@@ -16,7 +16,7 @@ export function registerPWA() {
             toast.success("Aplicativo pronto para uso offline.");
         },
         onNeedRefresh() {
-            toast.info("Nova versao disponivel. Atualizando aplicativo...");
+            toast.info("Nova versão disponível. Atualizando aplicativo...");
             void updateSW(true);
         },
         onRegisterError(error) {

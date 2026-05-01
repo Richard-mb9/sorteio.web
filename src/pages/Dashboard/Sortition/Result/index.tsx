@@ -1,16 +1,21 @@
-import AutorenewIcon from "@mui/icons-material/Autorenew";
 import CachedIcon from "@mui/icons-material/Cached";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CleaningServicesIcon from "@mui/icons-material/CleaningServices";
-import SportsIcon from "@mui/icons-material/Sports";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
-import Divider from "@mui/material/Divider";
+import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
+import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemText from "@mui/material/ListItemText";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -18,7 +23,12 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 import {
+    DEFAULT_MAX_CONSECUTIVE_WINS,
+    formatAllocatedPlayerList,
+    getCurrentMatchTeams,
+    getNextRotationTeams,
     isDrawResultOutdated,
+    type IAllocatedPlayer,
     type IApplicationSnapshot,
     type IDrawTeam,
 } from "../../../../commons/sortition";
@@ -31,27 +41,116 @@ import ViewActionsMenu from "../../../components/ViewActionsMenu";
 import AccessDenied from "../../../components/AccessDenied";
 import SwapPlayersDialog, { type ISwapSelection } from "./SwapPlayersDialog";
 
+interface IRotationGroup {
+    id: string;
+    label: string;
+    players: IAllocatedPlayer[];
+    team?: IDrawTeam;
+}
+
+function getWinChipColor(team: IDrawTeam, maxWins: number) {
+    if (team.currentWins >= maxWins) {
+        return "error" as const;
+    }
+
+    if (team.currentWins + 1 >= maxWins) {
+        return "warning" as const;
+    }
+
+    return "success" as const;
+}
+
+function buildGroupAfterSwap(
+    group: IRotationGroup | null,
+    leavingPlayerId: string | undefined,
+    enteringPlayerName: string | undefined
+) {
+    if (!group || !leavingPlayerId || !enteringPlayerName) {
+        return [];
+    }
+
+    return group.players.map((player) =>
+        player.playerId === leavingPlayerId ? enteringPlayerName : player.playerName
+    );
+}
+
 export default function ResultPage() {
     const navigate = useNavigate();
     const { hasAnyPermission } = usePermissions();
-    const { getApplicationStateSnapshot, clearExistingResult, generateNewDraw, confirmDrawSwap } =
-        useSortition();
+    const {
+        getApplicationStateSnapshot,
+        clearExistingResult,
+        generateNewDraw,
+        confirmDrawSwap,
+        confirmWinner,
+        setExistingPlayerActivity,
+    } = useSortition();
 
     const canRead = hasAnyPermission(["sortition:read", "sortition:*"]);
     const canManage = hasAnyPermission(["sortition:update", "sortition:*"]);
 
     const [snapshot, setSnapshot] = useState<IApplicationSnapshot | null>(null);
-    const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [swapSelections, setSwapSelections] = useState<ISwapSelection[]>([]);
     const [swapDialogOpen, setSwapDialogOpen] = useState(false);
+    const [winnerDialogTeamId, setWinnerDialogTeamId] = useState<string | null>(null);
     const [newDrawDialogOpen, setNewDrawDialogOpen] = useState(false);
     const [clearResultDialogOpen, setClearResultDialogOpen] = useState(false);
+    const [playerMenuAnchorEl, setPlayerMenuAnchorEl] = useState<HTMLElement | null>(null);
+    const [playerMenuSelection, setPlayerMenuSelection] = useState<ISwapSelection | null>(null);
 
     const result = snapshot?.result || null;
-    const isOutdated = isDrawResultOutdated(
-        result,
-        snapshot?.players || [],
-        snapshot?.configuration || null
+    const configuration = snapshot?.configuration || null;
+    const maxConsecutiveWins = configuration?.maxConsecutiveWins || DEFAULT_MAX_CONSECUTIVE_WINS;
+    const currentMatchTeams = getCurrentMatchTeams(result);
+    const nextTeams = getNextRotationTeams(result);
+    const selectedWinnerTeam =
+        currentMatchTeams.find((team) => team.id === winnerDialogTeamId) || null;
+    const isOutdated = isDrawResultOutdated(result, snapshot?.players || [], configuration);
+
+    const rotationGroups = useMemo<IRotationGroup[]>(() => {
+        if (!result) {
+            return [];
+        }
+
+        const teamGroups = result.teams.map((team) => ({
+            id: team.id,
+            label: team.label,
+            players: team.players,
+            team,
+        }));
+
+        if (result.excessPlayers.length === 0) {
+            return teamGroups;
+        }
+
+        return [
+            ...teamGroups,
+            {
+                id: "excess",
+                label: "Excedentes",
+                players: result.excessPlayers,
+            },
+        ];
+    }, [result]);
+
+    const firstSelection = swapSelections[0] || null;
+    const secondSelection = swapSelections[1] || null;
+    const firstSelectionGroup =
+        rotationGroups.find((group) => group.id === firstSelection?.teamId) || null;
+    const secondSelectionGroup =
+        rotationGroups.find((group) => group.id === secondSelection?.teamId) || null;
+    const swapSelectionByPlayerId = useMemo(() => {
+        return new Set(swapSelections.map((selection) => selection.playerId));
+    }, [swapSelections]);
+    const firstGroupAfterSwap = buildGroupAfterSwap(
+        firstSelectionGroup,
+        firstSelection?.playerId,
+        secondSelection?.playerName
+    );
+    const secondGroupAfterSwap = buildGroupAfterSwap(
+        secondSelectionGroup,
+        secondSelection?.playerId,
+        firstSelection?.playerName
     );
 
     async function refreshSnapshot() {
@@ -75,13 +174,6 @@ export default function ResultPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [canRead]);
 
-    const swapSelectionByPlayerId = useMemo(() => {
-        return new Set(swapSelections.map((selection) => selection.playerId));
-    }, [swapSelections]);
-
-    const firstSelection = swapSelections[0] || null;
-    const secondSelection = swapSelections[1] || null;
-
     const getTeamImpact = (team: IDrawTeam) => {
         const impact = result?.lastSwapImpact;
 
@@ -89,10 +181,15 @@ export default function ResultPage() {
             return null;
         }
 
+        const allPlayers = [
+            ...result.teams.flatMap((currentTeam) => currentTeam.players),
+            ...result.excessPlayers,
+        ];
+
         if (impact.teamAId === team.id) {
-            const playerLeft = result.teams
-                .flatMap((currentTeam) => currentTeam.players)
-                .find((player) => player.playerId === impact.playerLeftTeamAId);
+            const playerLeft = allPlayers.find(
+                (player) => player.playerId === impact.playerLeftTeamAId
+            );
             const playerEntered = team.players.find(
                 (player) => player.playerId === impact.playerEnteredTeamAId
             );
@@ -105,9 +202,9 @@ export default function ResultPage() {
         }
 
         if (impact.teamBId === team.id) {
-            const playerLeft = result.teams
-                .flatMap((currentTeam) => currentTeam.players)
-                .find((player) => player.playerId === impact.playerLeftTeamBId);
+            const playerLeft = allPlayers.find(
+                (player) => player.playerId === impact.playerLeftTeamBId
+            );
             const playerEntered = team.players.find(
                 (player) => player.playerId === impact.playerEnteredTeamBId
             );
@@ -122,20 +219,53 @@ export default function ResultPage() {
         return null;
     };
 
-    const handleToggleSelectionMode = () => {
-        setIsSelectionMode((previous) => !previous);
-        setSwapSelections([]);
-        setSwapDialogOpen(false);
-    };
+    const winnerConfirmationMessage = (() => {
+        if (!selectedWinnerTeam || !result) {
+            return "";
+        }
 
-    const handlePlayerSelection = (team: IDrawTeam, playerId: string, playerName: string) => {
-        if (!isSelectionMode) {
+        const nextWins = selectedWinnerTeam.currentWins + 1;
+        const reachedLimit = nextWins >= maxConsecutiveWins;
+        const opponent = currentMatchTeams.find((team) => team.id !== selectedWinnerTeam.id);
+        const doubleExitWillApply = Boolean(
+            reachedLimit && configuration?.doubleExitOnMaxWins && result.teams.length >= 4
+        );
+        const messages = [
+            `Confirmar que o grupo formado por ${formatAllocatedPlayerList(
+                selectedWinnerTeam.players
+            )} venceu esta partida?`,
+            `Vitórias atuais: ${selectedWinnerTeam.currentWins} de ${maxConsecutiveWins}. Após a confirmação: ${nextWins} de ${maxConsecutiveWins}.`,
+        ];
+
+        if (reachedLimit) {
+            messages.push(
+                "Este grupo atingirá o limite máximo de vitórias e sairá da partida após esta rodada."
+            );
+        }
+
+        if (doubleExitWillApply && opponent) {
+            messages.push(
+                `A regra de saída dupla será aplicada. ${opponent.label} também sairá da partida.`
+            );
+        }
+
+        if (reachedLimit && configuration?.doubleExitOnMaxWins && result.teams.length < 4) {
+            messages.push(
+                "A saída dupla está ativada, mas não será aplicada porque existem menos de 4 times completos."
+            );
+        }
+
+        return messages.join("\n\n");
+    })();
+
+    const handlePlayerSelection = (group: IRotationGroup, playerId: string, playerName: string) => {
+        if (swapSelections.length === 0) {
             return;
         }
 
         const currentSelection = {
-            teamId: team.id,
-            teamLabel: team.label,
+            teamId: group.id,
+            teamLabel: group.label,
             playerId,
             playerName,
         } satisfies ISwapSelection;
@@ -145,19 +275,12 @@ export default function ResultPage() {
         );
 
         if (existingSelectionIndex >= 0) {
-            setSwapSelections(
-                swapSelections.filter((selection) => selection.playerId !== playerId)
-            );
-            return;
-        }
-
-        if (swapSelections.length === 0) {
-            setSwapSelections([currentSelection]);
+            setSwapSelections([]);
             return;
         }
 
         if (swapSelections[0].teamId === currentSelection.teamId) {
-            toast.error("Nao e permitido trocar jogadores do mesmo time.");
+            toast.error("Não é permitido trocar jogadores do mesmo grupo.");
             return;
         }
 
@@ -167,7 +290,7 @@ export default function ResultPage() {
 
     const handleConfirmSwap = async () => {
         if (!firstSelection || !secondSelection) {
-            toast.error("Selecione um jogador de cada time para trocar.");
+            toast.error("Selecione um jogador de cada grupo para trocar.");
             return;
         }
 
@@ -189,7 +312,30 @@ export default function ResultPage() {
 
         setSwapDialogOpen(false);
         setSwapSelections([]);
-        setIsSelectionMode(false);
+    };
+
+    const handleConfirmWinner = async () => {
+        if (!selectedWinnerTeam) {
+            return;
+        }
+
+        const updatedResult = await confirmWinner({
+            winnerTeamId: selectedWinnerTeam.id,
+        });
+
+        if (updatedResult) {
+            setSnapshot((currentSnapshot) =>
+                currentSnapshot
+                    ? {
+                          ...currentSnapshot,
+                          result: updatedResult,
+                      }
+                    : currentSnapshot
+            );
+        }
+
+        setWinnerDialogTeamId(null);
+        setSwapSelections([]);
     };
 
     const handleGenerateNewDraw = async () => {
@@ -208,7 +354,6 @@ export default function ResultPage() {
 
         setNewDrawDialogOpen(false);
         setSwapSelections([]);
-        setIsSelectionMode(false);
     };
 
     const handleClearResult = async () => {
@@ -220,11 +365,176 @@ export default function ResultPage() {
 
         setClearResultDialogOpen(false);
         setSwapSelections([]);
-        setIsSelectionMode(false);
+    };
+
+    const handleOpenPlayerMenu = (
+        event: React.MouseEvent<HTMLElement>,
+        group: IRotationGroup,
+        player: IAllocatedPlayer
+    ) => {
+        event.stopPropagation();
+        setPlayerMenuAnchorEl(event.currentTarget);
+        setPlayerMenuSelection({
+            teamId: group.id,
+            teamLabel: group.label,
+            playerId: player.playerId,
+            playerName: player.playerName,
+        });
+    };
+
+    const handleClosePlayerMenu = () => {
+        setPlayerMenuAnchorEl(null);
+        setPlayerMenuSelection(null);
+    };
+
+    const handleMovePlayer = () => {
+        if (playerMenuSelection) {
+            setSwapSelections([playerMenuSelection]);
+            setSwapDialogOpen(false);
+        }
+
+        handleClosePlayerMenu();
+    };
+
+    const handleDeactivatePlayer = async () => {
+        if (!playerMenuSelection) {
+            return;
+        }
+
+        const updatedPlayer = await setExistingPlayerActivity(playerMenuSelection.playerId, false);
+
+        if (updatedPlayer) {
+            await refreshSnapshot();
+            setSwapSelections((currentSelections) =>
+                currentSelections.filter(
+                    (selection) => selection.playerId !== playerMenuSelection.playerId
+                )
+            );
+        }
+
+        handleClosePlayerMenu();
+    };
+
+    const renderPlayerList = (group: IRotationGroup, enteredPlayerId?: string) => (
+        <List disablePadding dense>
+            {group.players.map((player) => (
+                <ListItemButton
+                    key={player.allocationId}
+                    selected={swapSelectionByPlayerId.has(player.playerId)}
+                    onClick={() => handlePlayerSelection(group, player.playerId, player.playerName)}
+                    sx={{
+                        minHeight: 0,
+                        py: 0.5,
+                        px: 1,
+                        borderRadius: 1,
+                    }}
+                >
+                    <ListItemText
+                        primary={player.playerName}
+                        sx={{ my: 0 }}
+                        primaryTypographyProps={{
+                            variant: "body2",
+                        }}
+                    />
+                    <Stack direction="row" spacing={1}>
+                        {enteredPlayerId === player.playerId && (
+                            <Chip label="Entrou" size="small" color="success" />
+                        )}
+                        {swapSelectionByPlayerId.has(player.playerId) && (
+                            <Chip label="Selecionado" size="small" color="primary" />
+                        )}
+                        {canManage && (
+                            <IconButton
+                                aria-label={`Abrir ações de ${player.playerName}`}
+                                edge="end"
+                                size="small"
+                                onClick={(event) => handleOpenPlayerMenu(event, group, player)}
+                            >
+                                <MoreVertIcon fontSize="small" />
+                            </IconButton>
+                        )}
+                    </Stack>
+                </ListItemButton>
+            ))}
+        </List>
+    );
+
+    const renderTeamCard = (team: IDrawTeam, isCurrentMatch: boolean) => {
+        const teamImpact = getTeamImpact(team);
+        const group = {
+            id: team.id,
+            label: team.label,
+            players: team.players,
+            team,
+        } satisfies IRotationGroup;
+
+        return (
+            <Paper key={team.id} sx={{ p: { xs: 2, sm: 3 } }}>
+                <Stack spacing={2}>
+                    <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1}
+                        justifyContent="space-between"
+                        alignItems={{ xs: "flex-start", sm: "center" }}
+                    >
+                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                            <Typography variant="h6" component="h2">
+                                {team.label}
+                            </Typography>
+                            <Chip
+                                label={isCurrentMatch ? "Em partida" : `Ordem ${team.playOrder}`}
+                                size="small"
+                                color={isCurrentMatch ? "primary" : "default"}
+                            />
+                            {isCurrentMatch && (
+                                <Chip
+                                    label={`Vitórias ${team.currentWins} de ${maxConsecutiveWins}`}
+                                    size="small"
+                                    color={getWinChipColor(team, maxConsecutiveWins)}
+                                />
+                            )}
+                        </Stack>
+
+                        {isCurrentMatch && canManage && (
+                            <Button
+                                variant="contained"
+                                startIcon={<EmojiEventsIcon />}
+                                onClick={() => setWinnerDialogTeamId(team.id)}
+                            >
+                                Registrar vitória
+                            </Button>
+                        )}
+                    </Stack>
+
+                    {isCurrentMatch && team.currentWins + 1 >= maxConsecutiveWins && (
+                        <Alert severity="warning">
+                            Se vencer esta partida, este time sairá na próxima rotação.
+                        </Alert>
+                    )}
+
+                    {teamImpact && (
+                        <Alert severity="success" icon={<CheckCircleOutlineIcon />}>
+                            Saiu: {teamImpact.leftLabel}. Entrou: {teamImpact.enteredLabel}.
+                        </Alert>
+                    )}
+
+                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                        <Chip label={`${team.playerCount} jogadores`} size="small" />
+                        <Chip
+                            label={`Soma das notas ${team.notaTotal}`}
+                            size="small"
+                            color="secondary"
+                        />
+                    </Stack>
+
+                    {renderPlayerList(group, teamImpact?.enteredPlayerId)}
+                </Stack>
+            </Paper>
+        );
     };
 
     if (!canRead) {
-        return <AccessDenied message="Voce nao tem permissao para visualizar o resultado." />;
+        return <AccessDenied message="Você não tem permissão para visualizar a rotação." />;
     }
 
     return (
@@ -271,10 +581,10 @@ export default function ResultPage() {
                 <Paper sx={{ p: { xs: 2, sm: 3 } }}>
                     <Stack spacing={2.5}>
                         <Typography variant="h5" component="h1">
-                            Nenhum resultado salvo
+                            Nenhuma rotação salva
                         </Typography>
                         <Typography color="text.secondary">
-                            Nao existe resultado salvo para exibir.
+                            Realize um sorteio para iniciar a rotação das partidas.
                         </Typography>
                         <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
                             <Button variant="contained" onClick={() => navigate("/painel")}>
@@ -292,57 +602,33 @@ export default function ResultPage() {
                 <Stack spacing={2}>
                     {isOutdated && (
                         <Alert severity="warning">
-                            O resultado salvo pode ter sido gerado com base em um conjunto anterior
-                            de jogadores ou configuracao.
+                            A configuração de jogadores por time mudou em relação ao sorteio salvo.
+                        </Alert>
+                    )}
+
+                    {result.lastRotationSummary && (
+                        <Alert severity="success">
+                            Última rodada: {result.lastRotationSummary.winnerTeamLabel} venceu.
+                            Saíram: {result.lastRotationSummary.exitedTeamLabels.join(", ") || "-"}.
+                            Entraram:{" "}
+                            {result.lastRotationSummary.enteredTeamLabels.join(", ") || "-"}.
                         </Alert>
                     )}
 
                     <Paper sx={{ p: { xs: 2, sm: 3 } }}>
                         <Stack spacing={3}>
                             <Typography variant="h5" component="h1">
-                                Resultado do sorteio e ordem de jogo
+                                Rotação de partidas
                             </Typography>
 
-                            <CompactSection title="Cabecalho do resultado">
-                                <CompactInfoRow label="Status" value="Ativo" />
+                            <CompactSection title="Resumo da rotação">
+                                <CompactInfoRow label="Rodada atual" value={result.roundNumber} />
+                                <CompactInfoRow label="Times completos" value={result.totalTeams} />
                                 <CompactInfoRow
-                                    label="Total de jogadores"
-                                    value={result.totalPlayers}
-                                />
-                                <CompactInfoRow label="Total de homens" value={result.totalMen} />
-                                <CompactInfoRow
-                                    label="Total de mulheres"
-                                    value={result.totalWomen}
-                                />
-                                <CompactInfoRow
-                                    label="Jogadores por time"
-                                    value={result.playersPerTeamConfigured}
-                                />
-                                <CompactInfoRow
-                                    label="Quantidade de times"
-                                    value={result.totalTeams}
-                                />
-                                <CompactInfoRow
-                                    label="Possui time incompleto"
-                                    value={result.hasIncompleteTeam ? "Sim" : "Nao"}
-                                />
-                                <CompactInfoRow
-                                    label="Soma total das notas"
-                                    value={result.teams.reduce(
-                                        (sum, team) => sum + team.notaTotal,
-                                        0
-                                    )}
-                                />
-                                <CompactInfoRow
-                                    label="Diferenca entre maior e menor soma"
-                                    value={(() => {
-                                        const totals = result.teams.map((team) => team.notaTotal);
-                                        return Math.max(...totals) - Math.min(...totals);
-                                    })()}
+                                    label="Jogadores excedentes"
+                                    value={result.excessPlayers.length}
                                 />
                             </CompactSection>
-
-                            <Divider />
 
                             <Stack
                                 direction={{ xs: "column", sm: "row" }}
@@ -351,162 +637,91 @@ export default function ResultPage() {
                                 alignItems={{ xs: "stretch", sm: "center" }}
                             >
                                 <Typography variant="subtitle1" component="h2">
-                                    Times em sequencia unica
+                                    Partida atual
                                 </Typography>
-                                {canManage && (
-                                    <Button
-                                        variant={isSelectionMode ? "outlined" : "contained"}
-                                        startIcon={
-                                            isSelectionMode ? <AutorenewIcon /> : <SportsIcon />
-                                        }
-                                        onClick={handleToggleSelectionMode}
-                                    >
-                                        {isSelectionMode
-                                            ? "Cancelar selecao de troca"
-                                            : "Iniciar troca manual"}
-                                    </Button>
-                                )}
                             </Stack>
 
-                            {isSelectionMode && (
+                            {firstSelection && (
                                 <Alert severity="info">
-                                    Selecione um jogador de cada time para trocar.
+                                    {firstSelection.playerName} selecionado. Toque em outro jogador
+                                    para confirmar a troca.
+                                    <Button
+                                        size="small"
+                                        sx={{ ml: 1 }}
+                                        onClick={() => setSwapSelections([])}
+                                    >
+                                        Cancelar
+                                    </Button>
                                 </Alert>
                             )}
                         </Stack>
                     </Paper>
 
-                    {result.teams.map((team) => {
-                        const teamImpact = getTeamImpact(team);
+                    {currentMatchTeams.length < 2 && (
+                        <Alert severity="warning">
+                            Não há dois times completos em partida com os jogadores ativos atuais.
+                        </Alert>
+                    )}
 
-                        return (
-                            <Paper key={team.id} sx={{ p: { xs: 2, sm: 3 } }}>
-                                <Stack spacing={2}>
-                                    <Stack
-                                        direction={{ xs: "column", sm: "row" }}
-                                        spacing={1}
-                                        justifyContent="space-between"
-                                        alignItems={{ xs: "flex-start", sm: "center" }}
-                                    >
-                                        <Stack
-                                            direction="row"
-                                            spacing={1}
-                                            alignItems="center"
-                                            useFlexGap
-                                            flexWrap="wrap"
-                                        >
-                                            <Typography variant="h6" component="h2">
-                                                {team.label}
-                                            </Typography>
-                                            <Chip
-                                                label={`Ordem de jogo ${team.playOrder}`}
-                                                size="small"
-                                                color="primary"
-                                            />
-                                            {team.isOriginalIncompleteTeam && (
-                                                <Chip
-                                                    label="Ultimo time incompleto"
-                                                    size="small"
-                                                    color="warning"
-                                                />
-                                            )}
-                                        </Stack>
-                                        <Stack
-                                            direction="row"
-                                            spacing={1}
-                                            useFlexGap
-                                            flexWrap="wrap"
-                                        >
-                                            <Chip
-                                                label={`${team.playerCount} jogadores`}
-                                                size="small"
-                                            />
-                                            <Chip label={`${team.totalMen} homens`} size="small" />
-                                            <Chip
-                                                label={`${team.totalWomen} mulheres`}
-                                                size="small"
-                                            />
-                                            <Chip
-                                                label={`Nota ${team.notaTotal}`}
-                                                size="small"
-                                                color="secondary"
-                                            />
-                                            <Chip
-                                                label={`M ${team.notaTotalMen} / F ${team.notaTotalWomen}`}
-                                                size="small"
-                                                variant="outlined"
-                                            />
-                                        </Stack>
-                                    </Stack>
+                    {currentMatchTeams.map((team) => renderTeamCard(team, true))}
 
-                                    {teamImpact && (
-                                        <Alert severity="success" icon={<CheckCircleOutlineIcon />}>
-                                            Saiu: {teamImpact.leftLabel}. Entrou:{" "}
-                                            {teamImpact.enteredLabel}.
-                                        </Alert>
-                                    )}
+                    <Paper sx={{ p: { xs: 2, sm: 3 } }}>
+                        <Stack spacing={2}>
+                            <Typography variant="h6" component="h2">
+                                Próximos times
+                            </Typography>
+                            {nextTeams.length === 0 && (
+                                <Typography color="text.secondary">
+                                    Não há times aguardando na fila.
+                                </Typography>
+                            )}
+                        </Stack>
+                    </Paper>
 
-                                    <List disablePadding dense>
-                                        {team.players.map((player) => (
-                                            <ListItemButton
-                                                key={player.allocationId}
-                                                selected={swapSelectionByPlayerId.has(
-                                                    player.playerId
-                                                )}
-                                                onClick={() =>
-                                                    handlePlayerSelection(
-                                                        team,
-                                                        player.playerId,
-                                                        player.playerName
-                                                    )
-                                                }
-                                                sx={{
-                                                    minHeight: 0,
-                                                    py: 0.5,
-                                                    px: 1,
-                                                    borderRadius: 1,
-                                                }}
-                                            >
-                                                <ListItemText
-                                                    primary={player.playerName}
-                                                    sx={{ my: 0 }}
-                                                    primaryTypographyProps={{
-                                                        variant: "body2",
-                                                    }}
-                                                />
-                                                <Stack direction="row" spacing={1}>
-                                                    {teamImpact?.enteredPlayerId ===
-                                                        player.playerId && (
-                                                        <Chip
-                                                            label="Entrou"
-                                                            size="small"
-                                                            color="success"
-                                                        />
-                                                    )}
-                                                    {swapSelectionByPlayerId.has(
-                                                        player.playerId
-                                                    ) && (
-                                                        <Chip
-                                                            label="Selecionado"
-                                                            size="small"
-                                                            color="primary"
-                                                        />
-                                                    )}
-                                                </Stack>
-                                            </ListItemButton>
-                                        ))}
-                                    </List>
-                                </Stack>
-                            </Paper>
-                        );
-                    })}
+                    {nextTeams.map((team) => renderTeamCard(team, false))}
+
+                    {result.excessPlayers.length > 0 && (
+                        <Paper sx={{ p: { xs: 2, sm: 3 } }}>
+                            <Stack spacing={2}>
+                                <Typography variant="h6" component="h2">
+                                    Jogadores excedentes
+                                </Typography>
+                                {renderPlayerList({
+                                    id: "excess",
+                                    label: "Excedentes",
+                                    players: result.excessPlayers,
+                                })}
+                            </Stack>
+                        </Paper>
+                    )}
                 </Stack>
             )}
+
+            <Menu
+                anchorEl={playerMenuAnchorEl}
+                open={Boolean(playerMenuAnchorEl)}
+                onClose={handleClosePlayerMenu}
+            >
+                <MenuItem onClick={() => void handleDeactivatePlayer()}>
+                    <ListItemIcon>
+                        <PauseCircleOutlineIcon fontSize="small" />
+                    </ListItemIcon>
+                    Inativar
+                </MenuItem>
+                <MenuItem onClick={handleMovePlayer}>
+                    <ListItemIcon>
+                        <SwapHorizIcon fontSize="small" />
+                    </ListItemIcon>
+                    Mover
+                </MenuItem>
+            </Menu>
 
             <SwapPlayersDialog
                 open={swapDialogOpen}
                 firstSelection={firstSelection}
                 secondSelection={secondSelection}
+                firstGroupAfterSwap={firstGroupAfterSwap}
+                secondGroupAfterSwap={secondGroupAfterSwap}
                 onClose={() => {
                     setSwapDialogOpen(false);
                     setSwapSelections([]);
@@ -517,9 +732,20 @@ export default function ResultPage() {
             />
 
             <ConfirmDialog
+                open={Boolean(selectedWinnerTeam)}
+                title="Confirmar vencedor"
+                message={winnerConfirmationMessage}
+                confirmLabel="Confirmar vitória"
+                onConfirm={() => {
+                    void handleConfirmWinner();
+                }}
+                onCancel={() => setWinnerDialogTeamId(null)}
+            />
+
+            <ConfirmDialog
                 open={newDrawDialogOpen}
                 title="Confirmar novo sorteio"
-                message="O resultado atual sera substituido integralmente por um novo sorteio."
+                message="O resultado atual será substituído integralmente por um novo sorteio."
                 confirmLabel="Confirmar novo sorteio"
                 onConfirm={() => {
                     void handleGenerateNewDraw();
@@ -530,7 +756,7 @@ export default function ResultPage() {
             <ConfirmDialog
                 open={clearResultDialogOpen}
                 title="Limpar resultado"
-                message="Somente o resultado sera apagado. Os jogadores e a configuracao serao preservados."
+                message="Somente o resultado será apagado. Os jogadores e a configuração serão preservados."
                 confirmLabel="Limpar resultado"
                 onConfirm={() => {
                     void handleClearResult();

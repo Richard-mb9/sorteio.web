@@ -3,14 +3,17 @@ import SaveIcon from "@mui/icons-material/Save";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
+import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 import {
+    DEFAULT_MAX_CONSECUTIVE_WINS,
     calculateDrawPreview,
     filterActivePlayers,
     type IApplicationSnapshot,
@@ -31,6 +34,11 @@ export default function SettingsPage() {
 
     const [snapshot, setSnapshot] = useState<IApplicationSnapshot | null>(null);
     const [playersPerTeam, setPlayersPerTeam] = useState("");
+    const [maxConsecutiveWins, setMaxConsecutiveWins] = useState(
+        String(DEFAULT_MAX_CONSECUTIVE_WINS)
+    );
+    const [doubleExitOnMaxWins, setDoubleExitOnMaxWins] = useState(false);
+    const [rotationRandomnessEnabled, setRotationRandomnessEnabled] = useState(false);
     const [confirmDrawDialogOpen, setConfirmDrawDialogOpen] = useState(false);
 
     const activePlayers = filterActivePlayers(snapshot?.players || []);
@@ -38,7 +46,10 @@ export default function SettingsPage() {
     const totalPlayers = activePlayers.length;
     const existingResult = snapshot?.result || null;
     const parsedPlayersPerTeam = Number(playersPerTeam);
+    const parsedMaxConsecutiveWins = Number(maxConsecutiveWins);
     const isValidConfiguration = Number.isInteger(parsedPlayersPerTeam) && parsedPlayersPerTeam > 0;
+    const isValidWinLimit =
+        Number.isInteger(parsedMaxConsecutiveWins) && parsedMaxConsecutiveWins > 0;
     const drawPreview = calculateDrawPreview(
         totalPlayers,
         isValidConfiguration ? parsedPlayersPerTeam : null
@@ -50,6 +61,16 @@ export default function SettingsPage() {
         if (currentSnapshot) {
             setSnapshot(currentSnapshot);
             setPlayersPerTeam(currentSnapshot.configuration?.playersPerTeam?.toString() || "");
+            setMaxConsecutiveWins(
+                String(
+                    currentSnapshot.configuration?.maxConsecutiveWins ||
+                        DEFAULT_MAX_CONSECUTIVE_WINS
+                )
+            );
+            setDoubleExitOnMaxWins(Boolean(currentSnapshot.configuration?.doubleExitOnMaxWins));
+            setRotationRandomnessEnabled(
+                Boolean(currentSnapshot.configuration?.rotationRandomnessEnabled)
+            );
         }
     }
 
@@ -72,6 +93,11 @@ export default function SettingsPage() {
             return false;
         }
 
+        if (!isValidWinLimit) {
+            toast.error("Informe uma quantidade máxima de vitórias válida.");
+            return false;
+        }
+
         return true;
     };
 
@@ -82,6 +108,9 @@ export default function SettingsPage() {
 
         const configuration = await saveDrawConfiguration({
             playersPerTeam: parsedPlayersPerTeam,
+            maxConsecutiveWins: parsedMaxConsecutiveWins,
+            doubleExitOnMaxWins,
+            rotationRandomnessEnabled,
         });
 
         if (configuration) {
@@ -96,6 +125,9 @@ export default function SettingsPage() {
 
         const configuration = await saveDrawConfiguration({
             playersPerTeam: parsedPlayersPerTeam,
+            maxConsecutiveWins: parsedMaxConsecutiveWins,
+            doubleExitOnMaxWins,
+            rotationRandomnessEnabled,
         });
 
         if (!configuration) {
@@ -107,7 +139,7 @@ export default function SettingsPage() {
 
         if (response) {
             await refreshSnapshot();
-            navigate("/resultado");
+            navigate("/rotacao");
         }
 
         setConfirmDrawDialogOpen(false);
@@ -122,27 +154,27 @@ export default function SettingsPage() {
             <Stack direction="row" alignItems="center" spacing={2} mb={3}>
                 <BackButton />
                 <Typography variant="h5" component="h1">
-                    Configuracoes do sorteio
+                    Configurações do sorteio
                 </Typography>
             </Stack>
 
             {existingResult && (
                 <Alert severity="info" sx={{ mb: 2 }}>
-                    Alterar a configuracao nao modifica o resultado atual automaticamente. A nova
-                    configuracao vale para os proximos sorteios.
+                    Alterar a configuração não modifica o resultado atual automaticamente. A nova
+                    configuração vale para os próximos sorteios.
                 </Alert>
             )}
 
             {isValidConfiguration && !drawPreview.isEligible && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
-                    Nao ha jogadores suficientes para iniciar o sorteio. Atual: {totalPlayers}.
-                    Minimo necessario: {drawPreview.minimumPlayersNeeded}.
+                    Não há jogadores suficientes para iniciar o sorteio. Atual: {totalPlayers}.
+                    Mínimo necessário: {drawPreview.minimumPlayersNeeded}.
                 </Alert>
             )}
 
             {inactivePlayersCount > 0 && (
                 <Alert severity="info" sx={{ mb: 2 }}>
-                    Jogadores inativos sao desconsiderados no sorteio e em todo o calculo estrutural
+                    Jogadores inativos são desconsiderados no sorteio e em todo o cálculo estrutural
                     dos times.
                 </Alert>
             )}
@@ -160,6 +192,39 @@ export default function SettingsPage() {
                         inputMode="numeric"
                     />
 
+                    <TextField
+                        label="Máximo de vitórias consecutivas por time"
+                        value={maxConsecutiveWins}
+                        onChange={(event) =>
+                            setMaxConsecutiveWins(event.target.value.replace(/\D/g, "").slice(0, 2))
+                        }
+                        fullWidth
+                        required
+                        inputMode="numeric"
+                    />
+
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                checked={doubleExitOnMaxWins}
+                                onChange={(event) => setDoubleExitOnMaxWins(event.target.checked)}
+                            />
+                        }
+                        label="Remover os dois times quando um atingir o limite de vitórias"
+                    />
+
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                checked={rotationRandomnessEnabled}
+                                onChange={(event) =>
+                                    setRotationRandomnessEnabled(event.target.checked)
+                                }
+                            />
+                        }
+                        label="Aleatoriedade na rotação dos times"
+                    />
+
                     <CompactSection title="Resumo dinamico de impacto">
                         <CompactInfoRow
                             label="Jogadores ativos para sorteio"
@@ -167,7 +232,7 @@ export default function SettingsPage() {
                         />
                         <CompactInfoRow label="Jogadores inativos" value={inactivePlayersCount} />
                         <CompactInfoRow
-                            label="Minimo necessario para sortear"
+                            label="Mínimo necessário para sortear"
                             value={drawPreview.minimumPlayersNeeded || "-"}
                         />
                         <CompactInfoRow
@@ -175,16 +240,28 @@ export default function SettingsPage() {
                             value={drawPreview.totalTeams}
                         />
                         <CompactInfoRow
-                            label="Divisao exata"
-                            value={drawPreview.exactDivision ? "Sim" : "Nao"}
+                            label="Divisão exata"
+                            value={drawPreview.exactDivision ? "Sim" : "Não"}
                         />
                         <CompactInfoRow
                             label="Havera time incompleto"
-                            value={drawPreview.hasIncompleteTeam ? "Sim" : "Nao"}
+                            value={drawPreview.hasIncompleteTeam ? "Sim" : "Não"}
                         />
                         <CompactInfoRow
                             label="Quantidade prevista no ultimo time"
                             value={drawPreview.lastTeamPlayerCount || "-"}
+                        />
+                        <CompactInfoRow
+                            label="Máximo de vitórias por time"
+                            value={isValidWinLimit ? parsedMaxConsecutiveWins : "-"}
+                        />
+                        <CompactInfoRow
+                            label="Saída dupla no limite"
+                            value={doubleExitOnMaxWins ? "Ativada" : "Desativada"}
+                        />
+                        <CompactInfoRow
+                            label="Aleatoriedade na rotação dos times"
+                            value={rotationRandomnessEnabled ? "Ativada" : "Desativada"}
                         />
                     </CompactSection>
 
@@ -206,7 +283,9 @@ export default function SettingsPage() {
                         <Button
                             variant="contained"
                             startIcon={<PlayCircleIcon />}
-                            disabled={!drawPreview.isEligible || !isValidConfiguration}
+                            disabled={
+                                !drawPreview.isEligible || !isValidConfiguration || !isValidWinLimit
+                            }
                             onClick={() => {
                                 if (existingResult) {
                                     setConfirmDrawDialogOpen(true);
@@ -225,7 +304,7 @@ export default function SettingsPage() {
             <ConfirmDialog
                 open={confirmDrawDialogOpen}
                 title="Confirmar novo sorteio"
-                message="O resultado atual sera descartado e substituido por um novo sorteio com a configuracao informada."
+                message="O resultado atual será descartado e substituído por um novo sorteio com a configuração informada."
                 confirmLabel="Salvar e sortear"
                 onConfirm={() => {
                     void executeSaveAndDraw();

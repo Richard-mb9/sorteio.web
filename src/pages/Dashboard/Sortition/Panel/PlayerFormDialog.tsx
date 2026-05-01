@@ -137,7 +137,7 @@ export default function PlayerFormDialog({
                             step: 1,
                             inputMode: "numeric",
                         }}
-                        helperText="Nota tecnica inteira usada no balanceamento dos times."
+                        helperText="Nota técnica inteira usada no balanceamento dos times."
                         fullWidth
                         required
                     />

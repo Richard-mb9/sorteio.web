@@ -50,7 +50,7 @@ export default function ViewActionsMenu({ actions }: IViewActionsMenuProps) {
     return (
         <Box sx={{ ml: "auto", alignSelf: "flex-start" }}>
             <IconButton
-                aria-label="Abrir menu de acoes"
+                aria-label="Abrir menu de ações"
                 onClick={(event) => setAnchorEl(event.currentTarget)}
             >
                 <MoreVertIcon />

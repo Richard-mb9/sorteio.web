@@ -17,6 +17,8 @@ interface ISwapPlayersDialogProps {
     open: boolean;
     firstSelection: ISwapSelection | null;
     secondSelection: ISwapSelection | null;
+    firstGroupAfterSwap: string[];
+    secondGroupAfterSwap: string[];
     onClose: () => void;
     onConfirm: () => void;
 }
@@ -25,6 +27,8 @@ export default function SwapPlayersDialog({
     open,
     firstSelection,
     secondSelection,
+    firstGroupAfterSwap,
+    secondGroupAfterSwap,
     onClose,
     onConfirm,
 }: ISwapPlayersDialogProps) {
@@ -33,20 +37,38 @@ export default function SwapPlayersDialog({
             <DialogTitle>Confirmar troca manual</DialogTitle>
             <DialogContent>
                 <Stack spacing={2}>
-                    <Typography>Confirma a troca entre os jogadores selecionados?</Typography>
+                    <Typography>
+                        Confirma a troca entre {firstSelection?.playerName || "-"} e{" "}
+                        {secondSelection?.playerName || "-"}?
+                    </Typography>
                     <Stack spacing={1.25}>
-                        <Typography variant="subtitle2">Jogador do time A</Typography>
+                        <Typography variant="subtitle2">Primeiro grupo</Typography>
                         <Typography>
                             {firstSelection?.playerName || "-"} ({firstSelection?.teamLabel || "-"})
                         </Typography>
                     </Stack>
                     <Stack spacing={1.25}>
-                        <Typography variant="subtitle2">Jogador do time B</Typography>
+                        <Typography variant="subtitle2">Segundo grupo</Typography>
                         <Typography>
                             {secondSelection?.playerName || "-"} (
                             {secondSelection?.teamLabel || "-"})
                         </Typography>
                     </Stack>
+                    <Stack spacing={1.25}>
+                        <Typography variant="subtitle2">
+                            {firstSelection?.teamLabel || "Primeiro grupo"} após a troca
+                        </Typography>
+                        <Typography>{firstGroupAfterSwap.join(", ") || "-"}</Typography>
+                    </Stack>
+                    <Stack spacing={1.25}>
+                        <Typography variant="subtitle2">
+                            {secondSelection?.teamLabel || "Segundo grupo"} após a troca
+                        </Typography>
+                        <Typography>{secondGroupAfterSwap.join(", ") || "-"}</Typography>
+                    </Stack>
+                    <Typography color="text.secondary">
+                        Cada jogador passará a seguir a rotação do novo grupo.
+                    </Typography>
                 </Stack>
             </DialogContent>
             <DialogActions>
