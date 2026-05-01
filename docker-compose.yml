@@ -5,19 +5,23 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       additional_contexts:
-        src: .     
+        src: .
+    environment:
+      TLS_CERT_COMMON_NAME: "${TLS_CERT_COMMON_NAME:-192.168.29.67}"
+      TLS_CERT_ALT_NAMES: "${TLS_CERT_ALT_NAMES:-IP:192.168.29.67,IP:127.0.0.1,DNS:localhost}"
+      TLS_CERT_VALID_DAYS: "${TLS_CERT_VALID_DAYS:-825}"
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/certs:/etc/nginx/certs
     restart: unless-stopped
     mem_limit: 128m
     cpus: "0.25"
     networks:
       - sorteio_net
 
-
-
 networks:
   sorteio_net:
     driver: bridge
     name: sorteio_net
-

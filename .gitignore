@@ -25,4 +25,5 @@ dist-ssr
 *.sw?
 docs
 .codex
-
+docker/certs/*
+!docker/certs/.gitkeep

@@ -19,6 +19,7 @@
 **/coverage
 **/build
 **/dist
+docker/certs
 
 **/node_modules
 **/venv
