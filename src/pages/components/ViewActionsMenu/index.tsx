@@ -14,6 +14,7 @@ export interface IViewMenuAction {
     label: string;
     onClick: () => void;
     icon?: ReactNode;
+    disabled?: boolean;
 }
 
 interface IViewActionsMenuProps {
@@ -59,7 +60,12 @@ export default function ViewActionsMenu({ actions }: IViewActionsMenuProps) {
                 {resolvedActions.map((action) => (
                     <MenuItem
                         key={action.label}
+                        disabled={action.disabled}
                         onClick={() => {
+                            if (action.disabled) {
+                                return;
+                            }
+
                             setAnchorEl(null);
                             action.onClick();
                         }}

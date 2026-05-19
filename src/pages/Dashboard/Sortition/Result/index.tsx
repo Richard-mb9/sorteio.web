@@ -4,11 +4,18 @@ import CleaningServicesIcon from "@mui/icons-material/CleaningServices";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
+import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import UndoIcon from "@mui/icons-material/Undo";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
 import ListItemIcon from "@mui/material/ListItemIcon";
@@ -31,6 +38,7 @@ import {
     type IAllocatedPlayer,
     type IApplicationSnapshot,
     type IDrawTeam,
+    type IPlayer,
 } from "../../../../commons/sortition";
 import usePermissions from "../../../../hooks/usePermissions";
 import useSortition from "../../../../services/useSortition";
@@ -84,6 +92,7 @@ export default function ResultPage() {
         confirmDrawSwap,
         confirmWinner,
         setExistingPlayerActivity,
+        undoLastWinner,
     } = useSortition();
 
     const canRead = hasAnyPermission(["sortition:read", "sortition:*"]);
@@ -95,6 +104,9 @@ export default function ResultPage() {
     const [winnerDialogTeamId, setWinnerDialogTeamId] = useState<string | null>(null);
     const [newDrawDialogOpen, setNewDrawDialogOpen] = useState(false);
     const [clearResultDialogOpen, setClearResultDialogOpen] = useState(false);
+    const [undoWinnerDialogOpen, setUndoWinnerDialogOpen] = useState(false);
+    const [activatePlayersDialogOpen, setActivatePlayersDialogOpen] = useState(false);
+    const [activationPlayer, setActivationPlayer] = useState<IPlayer | null>(null);
     const [playerMenuAnchorEl, setPlayerMenuAnchorEl] = useState<HTMLElement | null>(null);
     const [playerMenuSelection, setPlayerMenuSelection] = useState<ISwapSelection | null>(null);
 
@@ -106,6 +118,10 @@ export default function ResultPage() {
     const selectedWinnerTeam =
         currentMatchTeams.find((team) => team.id === winnerDialogTeamId) || null;
     const isOutdated = isDrawResultOutdated(result, snapshot?.players || [], configuration);
+    const canUndoLastWinner = Boolean(result?.lastMatchUndoSnapshot);
+    const inactivePlayers = [...(snapshot?.players || [])]
+        .filter((player) => !player.isActive)
+        .sort((playerA, playerB) => playerA.name.localeCompare(playerB.name, "pt-BR"));
 
     const rotationGroups = useMemo<IRotationGroup[]>(() => {
         if (!result) {
@@ -367,6 +383,38 @@ export default function ResultPage() {
         setSwapSelections([]);
     };
 
+    const handleUndoLastWinner = async () => {
+        const updatedResult = await undoLastWinner();
+
+        if (updatedResult) {
+            setSnapshot((currentSnapshot) =>
+                currentSnapshot
+                    ? {
+                          ...currentSnapshot,
+                          result: updatedResult,
+                      }
+                    : currentSnapshot
+            );
+        }
+
+        setUndoWinnerDialogOpen(false);
+        setSwapSelections([]);
+    };
+
+    const handleActivatePlayer = async () => {
+        if (!activationPlayer) {
+            return;
+        }
+
+        const updatedPlayer = await setExistingPlayerActivity(activationPlayer.id, true);
+
+        if (updatedPlayer) {
+            await refreshSnapshot();
+        }
+
+        setActivationPlayer(null);
+    };
+
     const handleOpenPlayerMenu = (
         event: React.MouseEvent<HTMLElement>,
         group: IRotationGroup,
@@ -545,6 +593,17 @@ export default function ResultPage() {
                     <ViewActionsMenu
                         actions={[
                             {
+                                label: "Desfazer última vitória",
+                                onClick: () => setUndoWinnerDialogOpen(true),
+                                icon: <UndoIcon fontSize="small" />,
+                                disabled: !canUndoLastWinner,
+                            },
+                            {
+                                label: "Ativar jogadores",
+                                onClick: () => setActivatePlayersDialogOpen(true),
+                                icon: <PlayCircleOutlineIcon fontSize="small" />,
+                            },
+                            {
                                 label: "Refazer sorteio",
                                 onClick: () => setNewDrawDialogOpen(true),
                                 icon: <CachedIcon fontSize="small" />,
@@ -716,6 +775,41 @@ export default function ResultPage() {
                 </MenuItem>
             </Menu>
 
+            <Dialog
+                open={activatePlayersDialogOpen}
+                onClose={() => setActivatePlayersDialogOpen(false)}
+                fullWidth
+                maxWidth="xs"
+            >
+                <DialogTitle>Ativar jogadores</DialogTitle>
+                <DialogContent>
+                    {inactivePlayers.length === 0 ? (
+                        <Typography color="text.secondary" sx={{ py: 1 }}>
+                            Nenhum jogador inativo encontrado.
+                        </Typography>
+                    ) : (
+                        <List disablePadding>
+                            {inactivePlayers.map((player, index) => (
+                                <>
+                                    {index > 0 && <Divider />}
+                                    <Box key={player.id} pl={2}>
+                                        <ListItemButton
+                                            onClick={() => setActivationPlayer(player)}
+                                            sx={{ px: 0, py: 1 }}
+                                        >
+                                            <ListItemText primary={player.name} />
+                                        </ListItemButton>
+                                    </Box>
+                                </>
+                            ))}
+                        </List>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setActivatePlayersDialogOpen(false)}>Fechar</Button>
+                </DialogActions>
+            </Dialog>
+
             <SwapPlayersDialog
                 open={swapDialogOpen}
                 firstSelection={firstSelection}
@@ -740,6 +834,28 @@ export default function ResultPage() {
                     void handleConfirmWinner();
                 }}
                 onCancel={() => setWinnerDialogTeamId(null)}
+            />
+
+            <ConfirmDialog
+                open={undoWinnerDialogOpen}
+                title="Desfazer última vitória"
+                message="A rotação voltará ao estado anterior ao último registro de vitória. Depois disso, esta ação ficará desabilitada até que uma nova vitória seja registrada."
+                confirmLabel="Desfazer"
+                onConfirm={() => {
+                    void handleUndoLastWinner();
+                }}
+                onCancel={() => setUndoWinnerDialogOpen(false)}
+            />
+
+            <ConfirmDialog
+                open={Boolean(activationPlayer)}
+                title="Ativar jogador"
+                message={`Confirmar ativação de "${activationPlayer?.name || "este jogador"}"?`}
+                confirmLabel="Ativar"
+                onConfirm={() => {
+                    void handleActivatePlayer();
+                }}
+                onCancel={() => setActivationPlayer(null)}
             />
 
             <ConfirmDialog

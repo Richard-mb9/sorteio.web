@@ -112,6 +112,13 @@ export interface IMatchHistory {
     createdAt: string;
 }
 
+export interface IMatchUndoSnapshot {
+    id: string;
+    matchHistoryId: string;
+    resultBeforeMatch: IDrawResult;
+    createdAt: string;
+}
+
 export interface IPlannedSubstitution {
     teamId: string;
     teamLabel: string;
@@ -173,6 +180,7 @@ export interface IDrawResult {
     upcomingSubstitutions: IPlannedSubstitution[];
     lastRotationSummary: IRotationSummary | null;
     lastSwapImpact: IManualSwapImpact | null;
+    lastMatchUndoSnapshot: IMatchUndoSnapshot | null;
 }
 
 export interface IApplicationRestoration {

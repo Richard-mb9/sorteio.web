@@ -25,6 +25,7 @@ import {
     type IManualSwapHistory,
     type IManualSwapImpact,
     type IMatchHistory,
+    type IMatchUndoSnapshot,
     type IPlayer,
     type IPlannedSubstitution,
     type IRotationPlayerStats,
@@ -46,6 +47,7 @@ export const SORTITION_ERROR_CODES = {
     resultNotFound: "RESULT_NOT_FOUND",
     resultInvalid: "RESULT_INVALID",
     winnerInvalid: "WINNER_INVALID",
+    winnerUndoUnavailable: "WINNER_UNDO_UNAVAILABLE",
     swapIncompleteSelection: "SWAP_INCOMPLETE_SELECTION",
     swapSameTeam: "SWAP_SAME_TEAM",
     swapInvalidStructure: "SWAP_INVALID_STRUCTURE",
@@ -508,6 +510,35 @@ function validateRotationSummary(value: unknown): IRotationSummary | null {
     };
 }
 
+function validateMatchUndoSnapshot(value: unknown): IMatchUndoSnapshot | null {
+    if (!isObject(value)) {
+        return null;
+    }
+
+    const { id, matchHistoryId, resultBeforeMatch, createdAt } = value;
+
+    if (
+        typeof id !== "string" ||
+        typeof matchHistoryId !== "string" ||
+        typeof createdAt !== "string"
+    ) {
+        return null;
+    }
+
+    const parsedResultBeforeMatch = validateDrawResult(resultBeforeMatch, false);
+
+    if (!parsedResultBeforeMatch) {
+        return null;
+    }
+
+    return {
+        id,
+        matchHistoryId,
+        resultBeforeMatch: parsedResultBeforeMatch,
+        createdAt,
+    };
+}
+
 function isStoredResultStructurallyValid(result: IDrawResult) {
     if (
         !result.id ||
@@ -598,7 +629,7 @@ function isStoredResultStructurallyValid(result: IDrawResult) {
     );
 }
 
-function validateDrawResult(value: unknown): IDrawResult | null {
+function validateDrawResult(value: unknown, includeUndoSnapshot = true): IDrawResult | null {
     if (!isObject(value) || !Array.isArray(value.teams)) {
         return null;
     }
@@ -626,6 +657,7 @@ function validateDrawResult(value: unknown): IDrawResult | null {
         upcomingSubstitutions,
         lastRotationSummary,
         lastSwapImpact,
+        lastMatchUndoSnapshot,
     } = value;
 
     if (
@@ -709,6 +741,10 @@ function validateDrawResult(value: unknown): IDrawResult | null {
             : [],
         lastRotationSummary: validateRotationSummary(lastRotationSummary),
         lastSwapImpact: lastSwapImpact ? validateSwapImpact(lastSwapImpact) : null,
+        lastMatchUndoSnapshot:
+            includeUndoSnapshot && lastMatchUndoSnapshot
+                ? validateMatchUndoSnapshot(lastMatchUndoSnapshot)
+                : null,
     };
 
     const parsedResultWithUpcomingSubstitutions = {
@@ -1284,6 +1320,13 @@ function withUpcomingSubstitutions(result: IDrawResult, rotationRandomnessEnable
     } satisfies IDrawResult;
 }
 
+function withoutMatchUndoSnapshot(result: IDrawResult) {
+    return {
+        ...result,
+        lastMatchUndoSnapshot: null,
+    } satisfies IDrawResult;
+}
+
 function applyAutomaticSubstitutions(
     teams: IDrawTeam[],
     excessPlayers: IAllocatedPlayer[],
@@ -1420,6 +1463,20 @@ function resultHasPlayer(result: IDrawResult, playerId: string) {
     );
 }
 
+function getResultPlayerIds(result: IDrawResult) {
+    return new Set([
+        ...result.teams.flatMap((team) => team.players.map((player) => player.playerId)),
+        ...result.excessPlayers.map((player) => player.playerId),
+    ]);
+}
+
+function getResultPlayerQueueIds(result: IDrawResult) {
+    return [
+        ...result.teams.flatMap((team) => team.players.map((player) => player.playerId)),
+        ...result.excessPlayers.map((player) => player.playerId),
+    ];
+}
+
 function updateAllocatedPlayerFromPlayer(player: IAllocatedPlayer, updatedPlayer: IPlayer) {
     if (player.playerId !== updatedPlayer.id) {
         return player;
@@ -1465,6 +1522,36 @@ function addActivePlayerToRotation(result: IDrawResult, player: IPlayer) {
     });
 
     return withUpcomingSubstitutions(updatedResult);
+}
+
+function addMissingActivePlayersToRestoredResult(
+    restoredResult: IDrawResult,
+    currentResult: IDrawResult,
+    activePlayers: IPlayer[]
+) {
+    const restoredPlayerIds = getResultPlayerIds(restoredResult);
+    const activePlayersById = new Map(activePlayers.map((player) => [player.id, player]));
+    const orderedMissingPlayerIds = [
+        ...getResultPlayerQueueIds(currentResult).filter(
+            (playerId) => activePlayersById.has(playerId) && !restoredPlayerIds.has(playerId)
+        ),
+        ...activePlayers
+            .map((player) => player.id)
+            .filter(
+                (playerId) =>
+                    !restoredPlayerIds.has(playerId) && !resultHasPlayer(currentResult, playerId)
+            ),
+    ];
+
+    return orderedMissingPlayerIds.reduce((result, playerId) => {
+        const player = activePlayersById.get(playerId);
+
+        if (!player || resultHasPlayer(result, player.id)) {
+            return result;
+        }
+
+        return addActivePlayerToRotation(result, player);
+    }, restoredResult);
 }
 
 interface IReplacementCandidate {
@@ -1759,6 +1846,7 @@ function buildDrawResult(
             upcomingSubstitutions: [],
             lastRotationSummary: null,
             lastSwapImpact: null,
+            lastMatchUndoSnapshot: null,
         }),
         configuration.rotationRandomnessEnabled
     );
@@ -2166,6 +2254,12 @@ export async function confirmMatchWinner(data: IConfirmMatchWinnerRequest) {
                 matchHistory: [...currentResult.matchHistory, matchHistory],
                 lastRotationSummary,
                 lastSwapImpact: null,
+                lastMatchUndoSnapshot: {
+                    id: createLocalId("match-undo"),
+                    matchHistoryId: matchHistory.id,
+                    resultBeforeMatch: withoutMatchUndoSnapshot(currentResult),
+                    createdAt: now,
+                },
             },
             now
         ),
@@ -2174,6 +2268,34 @@ export async function confirmMatchWinner(data: IConfirmMatchWinnerRequest) {
 
     persistResult(updatedResult);
     return updatedResult;
+}
+
+export async function undoLastMatchWinner() {
+    const currentResult = readResultOrThrow();
+    const configuration = readConfigurationOrThrow();
+    const activePlayers = filterActivePlayers(readPlayersOrThrow());
+
+    if (!currentResult) {
+        throw createError(SORTITION_ERROR_CODES.resultNotFound);
+    }
+
+    if (!currentResult.lastMatchUndoSnapshot) {
+        throw createError(SORTITION_ERROR_CODES.winnerUndoUnavailable);
+    }
+
+    const now = new Date().toISOString();
+    const restoredResultWithCurrentActivePlayers = addMissingActivePlayersToRestoredResult(
+        withoutMatchUndoSnapshot(currentResult.lastMatchUndoSnapshot.resultBeforeMatch),
+        currentResult,
+        activePlayers
+    );
+    const restoredResult = withUpcomingSubstitutions(
+        rebuildResultTotals(restoredResultWithCurrentActivePlayers, now),
+        Boolean(configuration?.rotationRandomnessEnabled)
+    );
+
+    persistResult(restoredResult);
+    return restoredResult;
 }
 
 export async function confirmManualSwap(data: IConfirmManualSwapRequest) {

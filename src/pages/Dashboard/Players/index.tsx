@@ -162,17 +162,17 @@ function PlayersFiltersForm({
                     <Divider sx={{ mb: 2 }} />
                     <Stack spacing={2}>
                         <FormControl fullWidth>
-                            <InputLabel>Genero</InputLabel>
+                            <InputLabel>Gênero</InputLabel>
                             <Select
                                 value={formGender}
-                                label="Genero"
+                                label="Gênero"
                                 onChange={(event) =>
                                     setFormGender((event.target.value as PlayerGender | "") || "")
                                 }
                             >
                                 <MenuItem value="">Todos</MenuItem>
-                                <MenuItem value="M">Masculino</MenuItem>
-                                <MenuItem value="F">Feminino</MenuItem>
+                                <MenuItem value="M">Homens</MenuItem>
+                                <MenuItem value="F">Mulheres</MenuItem>
                             </Select>
                         </FormControl>
 
@@ -253,7 +253,7 @@ export default function PlayersPage() {
     const inactivePlayersCount = allPlayers.length - activePlayers.length;
     const advancedActiveCount = Number(Boolean(appliedGender)) + Number(Boolean(appliedStatus));
     const appliedAdvancedFilters = [
-        ...(appliedGender ? [`Genero: ${appliedGender === "M" ? "Masculino" : "Feminino"}`] : []),
+        ...(appliedGender ? [`Gênero: ${appliedGender === "M" ? "Homens" : "Mulheres"}`] : []),
         ...(appliedStatus ? [`Status: ${appliedStatus === "active" ? "Ativo" : "Inativo"}`] : []),
     ];
     const isResultOutdated = isDrawResultOutdated(

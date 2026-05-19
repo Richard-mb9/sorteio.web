@@ -28,6 +28,7 @@ import {
     listPlayers,
     saveConfiguration,
     setPlayerActiveStatus,
+    undoLastMatchWinner,
     updatePlayer,
 } from "./integrations/sortition";
 import { type IPaginatedResponse } from "./integrations/types";
@@ -53,6 +54,7 @@ interface IUseSortition {
     clearExistingResult: () => Promise<boolean>;
     confirmDrawSwap: (data: IConfirmManualSwapRequest) => Promise<IDrawResult | undefined>;
     confirmWinner: (data: IConfirmMatchWinnerRequest) => Promise<IDrawResult | undefined>;
+    undoLastWinner: () => Promise<IDrawResult | undefined>;
 }
 
 function getStorageErrorMessage() {
@@ -392,6 +394,32 @@ export default function useSortition(): IUseSortition {
         }
     };
 
+    const undoLastWinner = async () => {
+        try {
+            setIsLoading(true);
+            const result = await undoLastMatchWinner();
+            toast.success("Última vitória desfeita com sucesso.");
+            return result;
+        } catch (error) {
+            if (error instanceof SortitionDomainError) {
+                if (error.code === SORTITION_ERROR_CODES.resultNotFound) {
+                    toast.error("Não existe rotação salva para atualizar.");
+                    return;
+                }
+
+                if (error.code === SORTITION_ERROR_CODES.winnerUndoUnavailable) {
+                    toast.error("Não há vitória disponível para desfazer.");
+                    return;
+                }
+            }
+
+            toast.error("Não foi possível desfazer a última vitória.");
+            return;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return {
         getApplicationStateSnapshot,
         getPlayers,
@@ -405,5 +433,6 @@ export default function useSortition(): IUseSortition {
         clearExistingResult,
         confirmDrawSwap,
         confirmWinner,
+        undoLastWinner,
     };
 }

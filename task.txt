@@ -1,0 +1,20 @@
+na tela onde são listados os jogadores, eu quero adicionar os seguintes filtros:
+listar por status:
+	- ativos
+	- inativos
+
+listar por genero:
+	- homens
+	- mulheres
+	
+
+na tela rotação, eu quero adicionar as seguintes funcionalidades ao menu de tres pontos:
+Desfazer Ultima Vitoria
+	- serve para quando alguem registar a vitoria do grupo ou time errado, e precisar desfazer o registro
+	- quando não houver pelo menos uma vitoria após o sorteio tiver sido realizado, esta opção deve aparecer, porem desabilitada
+	- ela deve ser utilizada apenas 1 vez, após desfazer a ultima vitoria, esta opção deve aparecer desabilitada
+Ativar Jogadores:
+	- Qaundo esta opção for escolhida, deve aparecer um modal com todos os jogadores que estão Registrados porem inativados
+	- O Comportamento ao ativar um jogador por meio desta opção deve ser o mesmo de ativar o jogador pela tela da lista de jogadores
+	- Para ativar o jogador por este novo Modal, basta clicar em cima do nome do jogador, após isso deve apenas aparecer uma mensagem de confirmação para ativar o jogador
+	- o unico botão de ação que deve ser exibido neste modal, é o botão 'Fechar', que servira para fechar o modal 
